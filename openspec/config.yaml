@@ -1,0 +1,18 @@
+schema: spec-driven
+
+context: |
+  项目：ai-rd-team — 通用可定制的 AI Agent 数字人研发团队
+  架构：四层架构（表现层 → 服务层 → 引擎层 → 适配层）
+  技术栈：Python Flask + Vue3/TailwindCSS/Chart.js CDN + YAML 配置 + Markdown Skills
+  第一期运行时：CodeBuddy Team Mode
+  许可证：Apache 2.0
+  文档管理：openspec
+  设计文档：openspec/specs/2026-04-14-ai-rd-team-brainstorming.md
+
+rules:
+  proposal:
+    - 使用中文撰写
+    - 必须包含"非目标"部分
+  tasks:
+    - 每个任务不超过 4 小时工作量
+    - 任务描述必须包含验收标准
