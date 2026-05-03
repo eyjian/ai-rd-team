@@ -1,0 +1,193 @@
+experiment_id: P5-cost-baseline
+date: "2026-05-03"
+source: 基于 P1 真实实验（proto-p1-team, 3 成员，计算器任务，约 6 分钟）
+
+# 说明
+# CodeBuddy 未暴露精确 token API，以下为基于观察的估算。
+# 估算方法：根据制品大小 + 消息长度 + 成员独立上下文规模粗略推算。
+
+# ---------- 真实观察数据 ----------
+
+main_side_observations:
+  tool_calls_count: 15
+  messages_sent_to_members: 10     # 1 启动 + 6 汇报询问 + 3 shutdown
+  team_lifecycle_calls: 5          # 1 team_create + 3 task + 1 team_delete
+  observed_duration_minutes: 6
+
+member_side_artifacts:
+  architect:
+    produced: [design-note.md]
+    total_bytes: 2034
+    estimated_tokens: 780
+    estimated_work_rounds: 1-2      # 收消息 -> 写文档 -> 发消息
+  developer:
+    produced: [calculator.py]
+    total_bytes: 790
+    estimated_tokens: 220
+    estimated_work_rounds: 1-2      # 收消息 -> 读设计 -> 写代码 -> 发消息
+  tester:
+    produced: [test_calculator.py, test-results.txt]
+    total_bytes: 4197
+    estimated_tokens: 1060
+    estimated_work_rounds: 2-3      # 收消息 -> 读代码 -> 写测试 -> 执行 -> 发消息
+
+# ---------- 推算各操作的 token 消耗 ----------
+
+estimated_operation_costs:
+  team_create:
+    tokens: 50-100              # 纯 API 调用，几乎无 LLM 消耗
+    note: "注册表创建，不触发 LLM"
+
+  member_spawn:
+    tokens_per_member: 3000-5000
+    components:
+      system_prompt: 1000        # CodeBuddy 内置系统提示
+      role_prompt: 500-1000      # 我们的角色 prompt（约 400-800 词）
+      first_response: 500-1500   # 成员首次"确认收到"响应
+      context_reserved: 1000-1500 # 后续对话的基础上下文开销
+    notes:
+      - "每个成员是独立的 LLM 会话，有自己的上下文"
+      - "即使不做任何事，spawn 本身就有成本"
+
+  send_message_p2p:
+    tokens_per_message: 100-300
+    components:
+      sender_output: 50-150       # 成员产出消息的 output token
+      receiver_input: 50-150      # 接收方读取消息的 input token
+    notes:
+      - "消息本身短，但接收方可能因为消息触发一轮完整响应（看消息+回应）"
+      - "若接收方响应触发了工具调用（读文件/写文件），token 会增加"
+
+  member_work_round:
+    tokens_per_round: 2000-5000
+    components:
+      read_input_messages: 200-500
+      read_referenced_files: 500-2000   # 如 developer 读 design-note.md
+      think_and_respond: 500-1500
+      tool_calls: 500-1500              # 写文件/执行命令的开销
+    notes:
+      - "这是最大的消耗项"
+      - "具体取决于涉及多少文件读写"
+
+  broadcast:
+    tokens: sender_output + N * receiver_input
+    note: "N 个接收者线性放大，应严格限制"
+
+  member_idle:
+    tokens_per_minute: 50-150    # 成员等待消息时的心跳/轮询
+    note: "有消耗但不大"
+
+# ---------- P1 实验总消耗推算 ----------
+
+p1_total_estimate:
+  team_create: 100
+  member_spawns: 12000           # 3 成员 × 4000 平均
+  messages_main_to_members: 1500 # 10 条 × 150 平均
+  member_to_member: 900          # 估算 6 条 × 150
+  work_rounds:
+    architect: 3500              # 1 轮：读设计要求 + 写 2034 字节文档 + 发消息
+    developer: 4000              # 1 轮：读 design + 写代码 + 发消息
+    tester: 8000                 # 2 轮：读代码 + 写测试 + 执行 + 发消息 + 修复
+  shutdown: 600                  # 3 次 shutdown × 200
+  team_delete: 50
+
+  grand_total_tokens_estimated: 30650   # 约 30K
+  grand_total_cny_estimated: 0.65       # 按 Sonnet ¥21/1M input, ¥105/1M output 粗估
+  grand_total_cny_range: "¥0.5 - ¥1.5"  # 含估算误差
+  grand_total_usd_range: "$0.10 - $0.25"
+
+  resource_points_calculated:
+    per_member_spawn: 3            # 3 成员
+    per_message: 16                # main 发 10 + 推断 P2P 6
+    per_broadcast_target: 0
+    per_minute_runtime: 6          # 6 分钟
+    per_iteration: 3               # 3 个主要工作轮次
+
+# ---------- Resource Points 权重校准 ----------
+
+weight_calibration:
+  methodology: |
+    P1 的真实消耗（约 30K tokens）应当对应一个合理的 Resource Points 数值。
+    以"100 tokens ≈ 1 Resource Point"为锚定：30K tokens ≈ 300 RP。
+    反推各项权重。
+
+  original_weights:
+    per_member_spawn: 10
+    per_message: 1
+    per_broadcast_target: 1
+    per_minute_runtime: 2
+    per_iteration: 5
+
+  p1_calculation_with_original_weights:
+    member_spawn: "3 × 10 = 30"
+    message: "16 × 1 = 16"
+    runtime: "6 × 2 = 12"
+    iteration: "3 × 5 = 15"
+    total: 73
+    verdict: "原权重下 P1 只算 73 RP，但实际消耗等价约 300 RP — 权重偏低约 4 倍"
+
+  recommended_new_weights:
+    per_member_spawn: 40        # 10 → 40（原因：独立 LLM 会话开销大）
+    per_message: 2              # 1 → 2（一条消息常触发一轮响应）
+    per_broadcast_target: 2     # 1 → 2（按 message 同步调整）
+    per_minute_runtime: 5       # 2 → 5（闲置 + 轮询成本）
+    per_iteration: 15           # 5 → 15（工作轮次包含文件读写）
+
+  p1_calculation_with_new_weights:
+    member_spawn: "3 × 40 = 120"
+    message: "16 × 2 = 32"
+    runtime: "6 × 5 = 30"
+    iteration: "3 × 15 = 45"
+    total: 227
+    verdict: "约 227 RP，与实际 300 RP 接近（偏差 24%，可接受）"
+
+  档位预算相应调整:
+    budget_lite:
+      original_max_resource_points: 30
+      suggested_max_resource_points: 120    # 足够完成简单任务（1-2 成员 + 少量迭代）
+    budget_standard:
+      original_max_resource_points: 100
+      suggested_max_resource_points: 400    # 4-5 成员 + 中等复杂度
+    budget_full:
+      original_max_resource_points: 400
+      suggested_max_resource_points: 1500   # 10+ 成员 + 完整流程
+
+# ---------- 置信度评估 ----------
+
+confidence:
+  data_source_quality: low
+  reason: |
+    - 仅基于 1 个实验的数据
+    - 无法精确测量 CodeBuddy 的真实 token 消耗
+    - 估算基于制品大小、消息长度、合理推测
+    - 样本任务过于简单（计算器），不足以代表复杂研发场景
+  recommendation: |
+    第一期采用本校准权重作为初值；
+    实际运行 3-5 个真实项目后，基于真实成本数据再次校准。
+    详细设计 08-cost-control.md 应明确"权重热更新"机制。
+
+# ---------- 给详细设计的输入 ----------
+
+design_inputs:
+  resource_points_weights_v1:
+    per_member_spawn: 40
+    per_message: 2
+    per_broadcast_target: 2
+    per_minute_runtime: 5
+    per_iteration: 15
+
+  budget_v1:
+    lite: 120
+    standard: 400
+    full: 1500
+
+  cost_estimation_fallback: |
+    由于无法精确测量 token，采用"估算公式 + 事后人工校对"策略：
+    - 运行中：按资源点估算
+    - 运行后：引导用户从 CodeBuddy 面板填入真实消耗
+    - 每月：基于真实数据更新权重
+
+  architecture_notes: |
+    - cost_control 模块需要预留"权重配置可热更新"能力
+    - 资源计量与模型无关，不因换模型（Sonnet → Haiku）而改变权重
+    - 美元/人民币换算基于 token 数 × 单价，不走资源点

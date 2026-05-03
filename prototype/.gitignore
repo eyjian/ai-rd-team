@@ -1,0 +1,5 @@
+# P4 并发测试的临时产物（跑 concurrent_write.py 会生成）
+04-artifacts/results/concurrent-test/
+
+# P1 真实实验时 pytest 生成的缓存（保留 conclusion/artifacts 代码，忽略缓存）
+01-basic-team/results/artifacts/.pytest_cache/

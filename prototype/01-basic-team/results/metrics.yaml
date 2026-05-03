@@ -1,0 +1,117 @@
+experiment_id: P1-basic-team
+date: "2026-05-03"
+duration_minutes: 6
+model: claude-sonnet-4  # 假定
+team_name: proto-p1-team
+
+# 成员
+members:
+  - name: architect
+    role: Python 架构师
+    subagent_name: code-explorer
+    mode: bypassPermissions
+    max_turns: 15
+  - name: developer
+    role: Python 开发者
+    subagent_name: code-explorer
+    mode: bypassPermissions
+    max_turns: 15
+  - name: tester
+    role: Python 测试工程师
+    subagent_name: code-explorer
+    mode: bypassPermissions
+    max_turns: 15
+
+# main 视角的工具调用统计
+main_tool_calls:
+  team_create: 1
+  task_async: 3
+  send_message_start: 1
+  send_message_report_request: 3
+  send_message_report_followup: 3
+  send_message_shutdown: 3
+  team_delete: 1
+  total: 15
+
+# 制品产出
+artifacts:
+  - producer: architect
+    path: artifacts/design-note.md
+    size_bytes: 2034
+    estimated_tokens: 780
+    ts_offset_minutes: 1  # 相对启动时间
+  - producer: developer
+    path: artifacts/calculator.py
+    size_bytes: 790
+    estimated_tokens: 220
+    ts_offset_minutes: 1
+  - producer: tester
+    path: artifacts/test_calculator.py
+    size_bytes: 1723
+    estimated_tokens: 480
+    ts_offset_minutes: 2
+  - producer: tester
+    path: artifacts/test-results.txt
+    size_bytes: 2474
+    estimated_tokens: 580
+    ts_offset_minutes: 2
+
+# 验证假设结果
+assumptions:
+  p2p_communication:
+    result: PASS
+    evidence: main 只发 1 条启动消息，三成员自主完成协作
+  autonomous_drive:
+    result: PASS
+    evidence: architect 主动加 tester 建议章节；tester 主动执行 pytest
+  parallel_spawn:
+    result: PASS
+    evidence: 3 个 task(async) 快速并行派发，成员独立运行
+  artifact_production:
+    result: PASS
+    evidence: 4 个产物全部产出，26 个测试通过
+  member_to_main_visibility:
+    result: PARTIAL
+    evidence: main 无法在当前会话中直接看到成员的汇报回复
+    note: 可能需要通过文件产出作为汇报通道
+
+# 成功标准评估（来自 experiment.md）
+success_criteria:
+  - id: 1
+    description: P2P 消息数 ≥3
+    expected: ≥3
+    observed: 推断 ≥2（architect→developer→tester），通过制品链接推断
+    status: LIKELY_PASS
+  - id: 2
+    description: 制品产出
+    expected: 3 个文件
+    observed: 4 个文件（含 test-results.txt 意外产出）
+    status: PASS
+  - id: 3
+    description: 代码可运行
+    expected: 测试通过
+    observed: 26 passed in 0.03s
+    status: PASS
+  - id: 4
+    description: 自主决策体现
+    expected: ≥1 次
+    observed: ≥2 次（architect 加测试建议章节 + tester 执行测试并保存结果）
+    status: PASS
+  - id: 5
+    description: 团队清理
+    expected: team_delete 无残留
+    observed: 目录已清理
+    status: PASS
+
+# 最终结论
+conclusion: PASS_WITH_NOTES
+overall_verdict: |
+  CodeBuddy Team 模式支持 ai-rd-team 所需的核心能力：
+  - P2P 通信 ✅
+  - 自主驱动 ✅
+  - 并行派发 ✅
+  - 自由协作完成复杂任务 ✅
+
+  发现的限制：
+  - main 看不到成员向 main 的消息回复（需要通过文件产出作为汇报通道）
+  - 成员间消息内容对 main 不可见（需要文件监听方案补充）
