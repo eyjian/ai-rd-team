@@ -1,6 +1,6 @@
 # ai-rd-team 头脑风暴记录
 
-> 日期：2026-04-14 ~ 2026-04-15
+> 日期：2026-04-14 ~ 2026-05-03
 > 状态：头脑风暴完成，待进入详细设计
 
 ---
@@ -2457,10 +2457,470 @@ $ ai-rd-team init
 - Trae/Qoder 等其他平台适配器（架构已预留，只需新增适配器文件）
 - UI/UX 设计师角色
 - 国际化多语言包（第一期仅中文）
+- **粗估计费器**（基于第一期数据，第二期做）
+- **模型全自动降级**（需 CodeBuddy 开放工具级模型 API 或换 Adapter，第二期做）
+- **角色×模型独立运行时切换**（第一期仅支持记录意图，第二期生效）
+- **企业集中额度服务**（central_quota，第二期做）
 
 ---
 
-## 二十一、技术栈汇总
+## 二十一、分档运行模式与成本控制
+
+> **背景**：Agent Team 模式下，成员数量 × 独立上下文 × 消息往返 × 多轮评审讨论会导致 token 消耗数倍甚至十几倍于单 Agent 模式。如果产出质量提升不成比例，就会"得不偿失"。核心诉求：**提效提质 + 控制成本**。
+
+### 21.1 三档运行模式（Lite / Standard / Full）
+
+用户根据需求复杂度选择档位，**档位差异体现在"人数 + 协作流程"两方面**（不只是砍人）。
+
+#### 档位总览
+
+| 维度 | 🟢 Lite | 🟡 Standard | 🔴 Full |
+|------|---------|------------|---------|
+| **成员数** | 1-2 人 | 3-5 人 | 7-15 人 |
+| **适用场景** | Bug 修复、小改动、POC、脚本工具 | 单模块开发、中等复杂度特性 | 复杂系统、多模块并行、新项目启动 |
+| **Token 预估** | 0.5-1.5x 基准 | 2-4x 基准 | 8-15x 基准 |
+| **默认资源点** | 30 点 | 100 点 | 400 点 |
+
+> 基准 = 单 Agent 串行完成同一任务的 token 消耗。
+
+#### 协作流程简化对照
+
+| 协作环节 | 🟢 Lite | 🟡 Standard | 🔴 Full |
+|---------|---------|------------|---------|
+| 需求分析 | 开发者直读需求，有疑问问用户 | 架构师兼任分析，产出简要需求单 | 专职需求分析师，完整 PRD |
+| 架构设计 | 无（开发者自决） | 架构师简要方案（接口+数据模型） | 完整技术方案（UML+时序图） |
+| 任务拆分 | 无 | 架构师拆分 | PM 主导拆分并分配 |
+| 开发协作 | 单开发者串行 | 2-3 开发者按接口契约并行 | 多开发者并行+接口对齐讨论 |
+| 代码评审 | 无（或开发者自检） | 1 轮轻量评审 | 最多 3 轮 + 讨论机制 |
+| 测试 | 自测 + 基本单测 | 专职测试，功能测试 | 功能 + 集成 + 回归 |
+| 部署 | 开发者自部署 | DevOps 协助 | DevOps 全流程 |
+| 广播消息 | **禁用** | 关键节点（≤3 次） | 按需（≤10 次） |
+| 讨论轮次 | 无 | ≤1 轮 | ≤3 轮 |
+
+#### 档位成员组成
+
+```yaml
+presets:
+  lite:
+    members:
+      - developer        # 单开发者，兼任一切
+    optional:
+      - tester           # 可选一个测试
+    disabled_features:
+      - formal_review
+      - broadcast
+      - multi_round_discussion
+
+  standard:
+    members:
+      - architect        # 架构师（兼需求分析+任务拆分）
+      - developer × 2    # 2 个开发者
+      - reviewer         # 1 个检视者
+      - tester           # 1 个测试
+    disabled_features:
+      - multi_round_discussion  # 仅允许 1 轮评审
+
+  full:
+    members:
+      - pm               # 项目经理
+      - analyst          # 需求分析师
+      - architect        # 架构师
+      - developer × N    # 可伸缩开发者
+      - reviewer × N     # 可伸缩检视者
+      - tester × N       # 可伸缩测试
+      - devops           # DevOps
+    all_features_enabled: true
+```
+
+#### 档位选择机制
+
+| 场景 | 行为 |
+|------|------|
+| **首次启动** | 弹出档位选择器，让用户选择并记住选择 |
+| **后续启动** | 使用上次选择，提供"重新选择"入口 |
+| **运行中调整** | **只允许升档**（Lite → Standard → Full），不允许降档 |
+| **升档行为** | 新增角色加入团队，已有角色上下文保留 |
+| **降档需求** | 必须停止当前运行后重新启动 |
+
+**不允许降档的原因**：已在工作的成员突然被 shutdown，会丢失正在进行的工作上下文，且从协作角度看"把正在干活的人赶走"很反直觉。
+
+---
+
+### 21.2 成本控制：分阶段策略
+
+**关键认知**：CodeBuddy 当前**未暴露实时 token 消耗 API**，精确美元计费第一期做不到。方案采用务实的三阶段演进：
+
+| 阶段 | 计费模式 | 核心做法 |
+|------|---------|---------|
+| **第一期** | 资源单位硬限制 + 事后记录 | 按成员数/消息数/时长控制，不追求美元精度 |
+| **第二期** | 粗估计费器 | 基于第一期积累数据，用权重公式估算成本 |
+| **长期** | 精确计费 | 如 CodeBuddy 开放 token API 或换其他 Adapter 则切换 |
+
+---
+
+### 21.3 资源单位计量（第一期核心）
+
+**用"资源点（Resource Points）"作为统一计量维度**，不依赖具体模型价格。
+
+#### 资源点权重公式
+
+```yaml
+resource_point_weights:
+  per_member_spawn: 10          # 每派发 1 个成员 = 10 点
+  per_message: 1                # 每条 P2P 消息 = 1 点
+  per_broadcast_target: 1       # 广播每个接收者 = 1 点（5 人广播 = 5 点）
+  per_minute_runtime: 2         # 每分钟运行时长 = 2 点
+  per_iteration: 5              # 每轮评审/修复迭代 = 5 点
+```
+
+**示例计算**：Standard 档跑一个中等需求
+- 派发 5 个成员 = 50 点
+- 100 条消息 = 100 点
+- 3 次广播 × 5 人 = 15 点
+- 运行 90 分钟 = 180 点
+- 8 轮迭代 = 40 点
+- **合计 ≈ 385 点**
+
+> 第一期权重为经验值，第二期根据实际运行数据校准。
+
+#### 档位内单次预算
+
+```yaml
+cost_control:
+  enabled: true
+  billing_mode: "resource_units"    # 第一期默认
+  
+  budget_lite:
+    max_members: 2
+    max_messages: 20
+    max_broadcasts: 0
+    max_runtime_minutes: 30
+    max_total_iterations: 5
+    max_resource_points: 30
+  
+  budget_standard:
+    max_members: 5
+    max_messages: 100
+    max_broadcasts: 3
+    max_runtime_minutes: 120
+    max_total_iterations: 15
+    max_resource_points: 100
+  
+  budget_full:
+    max_members: 15
+    max_messages: 500
+    max_broadcasts: 10
+    max_runtime_minutes: 480
+    max_total_iterations: 50
+    max_resource_points: 400
+  
+  on_budget_exceeded: "smart_pause"
+  
+  post_run_recording:
+    enabled: true
+    prompt_user: true             # 运行结束询问用户从 CodeBuddy 面板填入实际消耗
+    storage: "~/.ai-rd-team/cost-history.jsonl"
+```
+
+#### 触达上限的"智能暂停"（smart_pause）
+
+```
+[⛔ 资源/预算达到上限]
+当前进度：开发完成 80%，待评审+测试
+已消耗：5 成员 / 100 消息 / 95 分钟 / 98 资源点
+
+请选择后续操作：
+  [1] 追加 50 资源点继续（推荐）
+  [2] 切换到便宜模型继续（需手动切换 CodeBuddy 模型）
+  [3] 仅保留关键角色继续（释放 tester/reviewer）
+  [4] 保存现场并暂停
+  [5] 放弃本次运行
+> 
+```
+
+---
+
+### 21.4 多级时间窗口额度（解决公司限额场景）
+
+**解决问题**：使用者不知道精确计价；公司限制每天/每周/每月最多消耗多少。
+
+```yaml
+quota:
+  enabled: true
+  unit: "resource_points"          # resource_points / cost_cny / cost_usd / token
+  
+  windows:
+    per_run: 100                   # 单次运行上限（通常等同档位预算）
+    per_day: 500                   # 日上限
+    per_week: 2000                 # 周上限
+    per_month: 6000                # 月上限
+  
+  on_exceed:
+    per_run: "smart_pause"         # 单次超 → 智能暂停
+    per_day: "block_new_run"       # 日超 → 禁止新任务（可手动覆盖）
+    per_week: "warn_and_block"     # 周超 → 警告+禁止
+    per_month: "block_and_report"  # 月超 → 禁止+发报告
+  
+  tracking:
+    storage: "~/.ai-rd-team/quota-history.jsonl"
+    report_on_startup: true        # 启动时展示剩余额度
+  
+  # 企业集中管控（第二期，可选）
+  central:
+    enabled: false
+    endpoint: "https://company.internal/ai-rd-team/quota"
+    policy_sync: true              # 定期同步公司策略
+    user_id_from: "env.USER_EMAIL"
+```
+
+#### 启动时的综合展示
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ai-rd-team 启动面板
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+👤 用户：zhangsan@company.com
+📅 今天：2026-05-03
+
+💳 计费模式：资源单位（订阅制）
+
+📊 额度剩余：
+  今日：  ⏳ 320 / 500  (剩 64%)
+  本周：  ⏳ 1450 / 2000 (剩 28%) ⚠️
+  本月：  ⏳ 4200 / 6000 (剩 30%)
+
+💡 本次预算（Standard 档）：100 点
+   预计：1 个完整需求开发
+
+请选择档位：
+  [1] 🟢 Lite     (30 点)   Bug 修复/小改动
+  [2] 🟡 Standard (100 点)  单模块开发  ← 默认
+  [3] 🔴 Full     (400 点)  复杂系统
+
+> 
+```
+
+---
+
+### 21.5 计费模式与多币种支持
+
+#### 四种计费模式
+
+```yaml
+cost_control:
+  billing_mode: "auto"
+  # auto:           首次启动询问，保存选择
+  # subscription:   订阅制（只看资源点，不显示金额）
+  # resource_units: 资源单位（默认推荐，无需懂计价）
+  # estimated_cost: 金额预估（需配 pricing.yaml）
+  # central_quota:  对接公司额度服务
+  
+  show_cost_in_ui: "auto"          # auto/always/never
+```
+
+#### 首次启动询问（一劳永逸）
+
+```
+欢迎使用 ai-rd-team！请选择你的计费场景：
+
+  [1] 我用订阅制（Claude Pro / CodeBuddy Plus）
+      → 使用资源限制模式，不显示金额
+  
+  [2] 我按 token 付费（或公司有明确额度）
+      → 使用金额预算模式，需配置单价
+  
+  [3] 公司统一管理（连接内部额度服务）
+      → 需填入公司额度服务地址
+  
+  [4] 我不确定，先用默认资源限制模式
+      → 推荐新手，随时可改
+
+> 
+```
+
+#### 多币种配置
+
+```yaml
+display_currency: "auto"              # auto 按 locale / CNY / USD
+confirm_currency_on_startup: true     # 启动时确认币种
+```
+
+```yaml
+# ~/.ai-rd-team/pricing.yaml（仅 estimated_cost 模式需要）
+display_currency: "CNY"
+
+models:
+  claude-sonnet-4:
+    input_per_1m:
+      USD: 3.0
+      CNY: 21.0
+    output_per_1m:
+      USD: 15.0
+      CNY: 105.0
+  claude-haiku:
+    input_per_1m:
+      USD: 0.25
+      CNY: 1.75
+    output_per_1m:
+      USD: 1.25
+      CNY: 8.75
+
+fx_rate:
+  USD_to_CNY: 7.0
+  last_updated: "2026-05-01"
+```
+
+#### 不同计费模式下的 Web 面板展示差异
+
+| 计费模式 | 面板展示内容 |
+|---------|-------------|
+| `subscription` | 只显示资源点、进度条、时长 |
+| `resource_units` | 资源点 + 进度条 + 时长（默认） |
+| `estimated_cost` | 资源点 + **¥23.45**（辅助金额） |
+| `central_quota` | 资源点 + 剩余企业额度 |
+
+---
+
+### 21.6 模型降级机制
+
+**触发条件**：消耗达到预算 75% 时自动触发。
+
+#### 第一期：半自动降级（CodeBuddy 适配）
+
+**现实约束**：CodeBuddy 当前不支持工具级切换模型，子成员沿用当前 IDE 选中的模型，**无法在 Agent 运行时动态切换**。
+
+**运行流程**：
+1. 消耗达到 75% 阈值 → 适配层感知
+2. Web 面板/终端弹出提示：
+   ```
+   [💰 预算 75%] 建议切换到便宜模型继续
+   
+   操作指引：
+   1. 在 CodeBuddy 右上角切换到 claude-haiku
+   2. 点击下方按钮恢复运行
+   
+   [已切换，恢复运行]  [继续当前模型]  [暂停]
+   ```
+3. 用户在 CodeBuddy 手动切换模型
+4. 适配层通过环境/配置感知新模型，继续运行
+
+#### 第二期：完全自动降级
+
+**启用条件**（满足任一）：
+- CodeBuddy 开放工具级模型 API
+- 使用直连 Claude API / OpenRouter 等支持此能力的 Adapter
+- 通过 MCP 代理层做模型路由
+
+**降级策略：hybrid（混合）**
+1. **先按角色降级**：优先降次要角色（log_writer → tester → reviewer）
+2. **再级联降级**：仍不够则全员降到下一档模型（sonnet → haiku → deepseek → 本地）
+
+#### 完整配置
+
+```yaml
+cost_control:
+  model_fallback:
+    enabled: true
+    fallback_mode: "auto"            # auto/semi_auto/full_auto/disabled
+    # auto: 适配层根据平台能力自动选
+    # semi_auto: 提示用户手动切换（第一期 CodeBuddy 实际模式）
+    # full_auto: 全自动切换（需 Adapter 支持工具级模型切换）
+    # disabled: 关闭降级，只走 smart_pause
+    
+    trigger_threshold: 0.75          # 75% 触发
+    strategy: "hybrid"               # hybrid / cascade / role_based
+    
+    model_chain:                     # 从贵到便宜
+      - "claude-sonnet-4"
+      - "claude-haiku"
+      - "deepseek-v3"
+      - "local-qwen"
+    
+    role_priority:                   # 数值越小越优先降级
+      log_writer: 1
+      tester: 2
+      reviewer: 3
+      developer: 4
+      architect: 5
+      pm: 5
+    
+    on_trigger: "auto"               # auto / ask / notify_only
+
+# 角色×模型独立配置（第一期仅记录意图，第二期生效）
+role_models:
+  enabled: true
+  warning_if_unsupported: true       # 当前 Adapter 不支持时提示
+  config:
+    architect: "claude-sonnet-4"     # 关键角色用贵模型
+    pm: "claude-sonnet-4"
+    analyst: "claude-sonnet-4"
+    developer: "claude-sonnet-4"
+    reviewer: "claude-haiku"         # 次要角色用便宜模型
+    tester: "claude-haiku"
+    log_writer: "local-qwen"         # 辅助角色用本地模型
+```
+
+---
+
+### 21.7 Web 面板成本追踪展示
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━
+当前档位：🟡 Standard          [升档 ⬆]
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 本次资源消耗
+  成员：3 / 5
+  消息：42 / 100
+  广播：1 / 3
+  时长：35min / 120min
+  迭代：3 / 15
+  资源点：67 / 100  ████████░░░░ 67%
+
+💰 成本追踪（¥ CNY，辅助展示）
+  已消耗：¥23.45（约 $3.35）
+  预算：¥50.00
+
+━━━ 成员消耗明细 ━━━
+周立项   sonnet-4        ¥2.10   12 点
+陈架构   sonnet-4        ¥8.90   22 点
+林小开   sonnet-4        ¥4.50   15 点
+王小审   haiku ⬇         ¥0.35    8 点
+赵小测   haiku ⬇         ¥0.28   10 点
+
+━━━ 额度情况 ━━━
+今日剩余：253 / 500
+本周剩余：1383 / 2000 ⚠️
+本月剩余：4133 / 6000
+━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+---
+
+### 21.8 设计关键决策汇总
+
+| # | 决策点 | 结果 |
+|---|--------|------|
+| 1 | 成本控制方案 | **C. 分档可选** |
+| 2 | 三档组成 | Lite / Standard / Full |
+| 3 | 简化维度 | 人数 + 协作流程都简化 |
+| 4 | 默认档位 | 首次启动问一次，记住选择 |
+| 5 | 档位运行中调整 | 只能升档，不能降档 |
+| 6 | 超限行为 | smart_pause（给多个选项） |
+| 7 | 第一期计费 | 资源单位硬限制 + 事后记录 |
+| 8 | 时间窗口额度 | 日/周/周/月四级可配置 |
+| 9 | 币种支持 | CNY + USD，auto 检测 locale + 启动确认 |
+| 10 | 首次启动询问计费模式 | 订阅制 / 按 token / 企业集中 / 默认资源 |
+| 11 | 降级策略 | hybrid（按角色 + 级联） |
+| 12 | 降级触发阈值 | 75% |
+| 13 | 角色×模型独立配置 | 第一期记录意图，第二期生效 |
+| 14 | 降级模式（第一期） | semi_auto（提示用户手动切换 CodeBuddy 模型） |
+| 15 | 降级模式（第二期） | full_auto（需 Adapter 支持工具级模型切换） |
+
+---
+
+## 二十二、技术栈汇总
 
 | 组件 | 技术选型 |
 |------|---------|
@@ -2477,7 +2937,7 @@ $ ai-rd-team init
 
 ---
 
-## 二十二、设计补充维度汇总
+## 二十三、设计补充维度汇总
 
 | # | 维度 | 说明 |
 |---|------|------|
@@ -2509,10 +2969,16 @@ $ ai-rd-team init
 | 26 | 交付清单 | 项目完成后自动生成代码/文档产物清单和启动/部署说明 |
 | 27 | 安全约束 | 命令白/黑名单、文件可写/只读范围 |
 | 28 | 配置版本管理 | 配置文件版本号，支持升级时自动迁移 |
+| 29 | 分档运行模式 | Lite/Standard/Full 三档，人数+流程差异化，控制成本 |
+| 30 | 资源单位计量 | Resource Points 统一维度，不依赖模型价格 |
+| 31 | 多级时间窗口额度 | 单次/日/周/月四级，应对公司限额场景 |
+| 32 | 多币种与计费模式 | CNY/USD 双币展示，4 种计费模式首次启动询问 |
+| 33 | 模型降级机制 | hybrid 策略，第一期半自动提示，第二期全自动 |
+| 34 | 成本事后记录 | 第一期事后填入实际 token/成本，为第二期校准数据 |
 
 ---
 
-## 二十三、待继续
+## 二十四、待继续
 
 1. 完成详细设计文档（各层详细接口定义、数据结构等）
 2. 设计自审
