@@ -66,14 +66,33 @@ Issues = "https://github.com/eyjian/ai-rd-team/issues"
 # ===== Hatch =====
 [tool.hatch.build.targets.wheel]
 packages = ["src/ai_rd_team"]
+# 显式带上非 .py 资源（preset YAML / builtin skills / web HTML）
+# Hatchling 默认会包含 package 目录下所有文件，这里作为文档记录
+include = [
+    "src/ai_rd_team/**/*.py",
+    "src/ai_rd_team/**/*.yaml",
+    "src/ai_rd_team/**/*.md",
+    "src/ai_rd_team/**/*.html",
+]
+exclude = [
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/.pytest_cache",
+]
 
 [tool.hatch.build.targets.sdist]
 include = [
     "src/ai_rd_team",
     "skills",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE",
     "pyproject.toml",
+]
+exclude = [
+    "**/__pycache__",
+    "**/*.pyc",
+    "**/.pytest_cache",
 ]
 
 # ===== Ruff =====

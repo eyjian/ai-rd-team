@@ -1,0 +1,15 @@
+config_version: "1.0"
+
+project:
+  description: "BlogAPI - Go + Kratos 博客后端"
+
+run_mode: "standard"
+
+tech_stack:
+  backend: "go"          # 明确告诉架构师用 Go
+  frontend: null
+  mobile: null
+
+budget:
+  per_run: 400
+  per_day: 1500

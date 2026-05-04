@@ -1,0 +1,15 @@
+config_version: "1.0"
+
+project:
+  description: "TodoMini - 微信小程序 TodoList"
+
+run_mode: "standard"
+
+tech_stack:
+  backend: null
+  frontend: null
+  mobile: "wechat-miniprogram"
+
+budget:
+  per_run: 400
+  per_day: 1500

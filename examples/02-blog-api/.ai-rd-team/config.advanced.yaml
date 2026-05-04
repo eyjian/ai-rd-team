@@ -1,0 +1,21 @@
+# Advanced 配置 — 给特定角色注入 Go+Kratos Skills
+
+roles:
+  architect:
+    skills:
+      - "go-kratos-basics"
+      - "code-review-checklist"
+  developer:
+    skills:
+      - "go-kratos-basics"
+    default_instances: 2
+    max_instances: 3
+  reviewer:
+    skills:
+      - "go-kratos-basics"
+      - "code-review-checklist"
+  tester:
+    skills:
+      - "go-kratos-basics"
+
+# 其他配置沿用 Standard preset 默认值

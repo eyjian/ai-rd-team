@@ -1,0 +1,16 @@
+roles:
+  architect:
+    skills:
+      - "wxmini-basics"
+      - "code-review-checklist"
+  developer:
+    skills:
+      - "wxmini-basics"
+    default_instances: 2
+  reviewer:
+    skills:
+      - "wxmini-basics"
+      - "code-review-checklist"
+  tester:
+    skills:
+      - "pytest-guide"    # 虽然用 Jest，但测试风格共通（AAA / parametrize）
