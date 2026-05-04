@@ -1,0 +1,10 @@
+members:
+- instance_name: architect
+  role: architect
+- instance_name: developer_1
+  role: developer
+- instance_name: developer_2
+  role: developer
+- instance_name: tester
+  role: tester
+last_updated: '2026-05-04T06:41:14.194+00:00'

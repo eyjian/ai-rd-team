@@ -1,0 +1,64 @@
+# Advanced 配置 — 给特定角色注入 Go+Kratos Skills + Memory scope
+
+# Bridge 超时：真实 CodeBuddy 响应 task/send_message 可能较慢
+adapter:
+  bridge_timeout_seconds: 300
+
+# ⚠️ 注意：当前 ConfigLoader._build_role 会用默认值覆盖未显式指定的字段
+# （display_name / persona / memory_scope / scalable 等），
+# 所以必须把默认值全部显式写上，否则 builtin_roles 的默认会丢失。
+# 跟踪 issue：会在下一个版本修复 Role 合并逻辑。
+roles:
+  architect:
+    display_name: "陈架构"
+    persona: "你是架构师陈架构，注重接口清晰、模块解耦、可演进。"
+    scalable: false
+    default_instances: 1
+    max_instances: 1
+    skills:
+      - "go-kratos-basics"
+      - "code-review-checklist"
+    memory_scope:
+      agent_d:
+        - "tech-stack-selected"
+        - "interface-contracts"
+        - "key-decisions"
+
+  developer:
+    display_name: "林"
+    persona: "你是开发工程师，按接口契约实现代码，主动与队友协调。"
+    scalable: true
+    default_instances: 2
+    max_instances: 3
+    skills:
+      - "go-kratos-basics"
+    memory_scope:
+      agent_d:
+        - "tech-stack-selected"
+        - "interface-contracts"
+
+  reviewer:
+    display_name: "王"
+    persona: "你是代码检视者，关注质量、风格、潜在 bug，给出具体可操作的建议。"
+    scalable: true
+    default_instances: 1
+    max_instances: 3
+    skills:
+      - "go-kratos-basics"
+      - "code-review-checklist"
+    memory_scope:
+      agent_d:
+        - "tech-stack-selected"
+        - "key-decisions"
+
+  tester:
+    display_name: "赵"
+    persona: "你是测试工程师，擅长从边界/异常/正常三类用例覆盖功能。"
+    scalable: true
+    default_instances: 1
+    max_instances: 3
+    skills:
+      - "go-kratos-basics"
+    memory_scope:
+      agent_d:
+        - "interface-contracts"

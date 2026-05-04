@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package api.blog.v1;
+
+import "google/api/annotations.proto";
+import "validate/validate.proto";
+
+option go_package = "blog/api/blog/v1;v1";
+option java_multiple_files = true;
+option java_package = "api.blog.v1";
+
+// CommentService 评论 + 点赞服务
+service Comment {
+  // Create 发表评论（需 JWT）
+  // HTTP: POST /v1/posts/{post_id}/comments
+  rpc Create(CreateCommentRequest) returns (CommentInfo) {
+    option (google.api.http) = {
+      post: "/v1/posts/{post_id}/comments"
+      body: "*"
+    };
+  }
+
+  // List 文章评论列表（按时间倒序）
+  // HTTP: GET /v1/posts/{post_id}/comments
+  rpc List(ListCommentRequest) returns (ListCommentReply) {
+    option (google.api.http) = {
+      get: "/v1/posts/{post_id}/comments"
+    };
+  }
+
+  // Like 点赞（幂等，需 JWT）
+  // HTTP: POST /v1/posts/{post_id}/like
+  rpc Like(LikeRequest) returns (LikeReply) {
+    option (google.api.http) = {
+      post: "/v1/posts/{post_id}/like"
+      body: "*"
+    };
+  }
+
+  // Unlike 取消点赞（幂等，需 JWT）
+  // HTTP: DELETE /v1/posts/{post_id}/like
+  rpc Unlike(LikeRequest) returns (LikeReply) {
+    option (google.api.http) = {
+      delete: "/v1/posts/{post_id}/like"
+    };
+  }
+}
+
+message CreateCommentRequest {
+  int64  post_id = 1 [(validate.rules).int64.gt = 0];
+  string content = 2 [(validate.rules).string = {min_len: 1, max_len: 2000}];
+}
+
+message ListCommentRequest {
+  int64 post_id = 1 [(validate.rules).int64.gt = 0];
+  // page/size 可选（默认 page=1 size=20，最大 size=100）
+  int32 page    = 2 [(validate.rules).int32 = {gte: 0}];
+  int32 size    = 3 [(validate.rules).int32 = {gte: 0, lte: 100}];
+}
+
+message ListCommentReply {
+  repeated CommentInfo comments = 1;
+  int64                total    = 2;
+  int32                page     = 3;
+  int32                size     = 4;
+}
+
+message CommentInfo {
+  int64  id              = 1;
+  int64  post_id         = 2;
+  int64  author_id       = 3;
+  string author_nickname = 4;
+  string content         = 5;
+  string created_at      = 6; // RFC3339
+}
+
+message LikeRequest {
+  int64 post_id = 1 [(validate.rules).int64.gt = 0];
+}
+
+message LikeReply {
+  // likes_count: 操作后文章的最新点赞数
+  int64 likes_count = 1;
+  // liked: 操作后当前用户是否处于已点赞状态
+  bool  liked       = 2;
+}

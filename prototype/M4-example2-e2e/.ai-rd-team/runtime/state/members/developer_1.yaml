@@ -1,0 +1,13 @@
+name: developer_1
+role: developer
+status: failed
+current_task: 'implement biz + data layer for user/post/comment'
+progress: 'biz layer partially done (biz.go, user.go, post.go, comment.go produced); data layer and unit tests NOT completed due to team shutdown request'
+last_updated: '2026-05-04T06:48:00.000+00:00'
+produced_files:
+  - artifacts/code/internal/biz/biz.go
+  - artifacts/code/internal/biz/user.go
+  - artifacts/code/internal/biz/post.go
+  - artifacts/code/internal/biz/comment.go
+blocking_issues:
+  - 'team shutdown requested before data layer and biz unit tests were written'

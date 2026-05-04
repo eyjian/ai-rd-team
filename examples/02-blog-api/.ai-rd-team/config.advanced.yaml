@@ -4,6 +4,8 @@
 adapter:
   bridge_timeout_seconds: 300
 
+# 注意：未显式指定的字段（display_name / persona / memory_scope / scalable 等）
+# 会从 builtin_roles 的默认继承（v0.1.0a1+ 行为）
 roles:
   architect:
     skills:
@@ -12,8 +14,6 @@ roles:
   developer:
     skills:
       - "go-kratos-basics"
-    default_instances: 2
-    max_instances: 3
   reviewer:
     skills:
       - "go-kratos-basics"
@@ -21,5 +21,3 @@ roles:
   tester:
     skills:
       - "go-kratos-basics"
-
-# 其他配置沿用 Standard preset 默认值

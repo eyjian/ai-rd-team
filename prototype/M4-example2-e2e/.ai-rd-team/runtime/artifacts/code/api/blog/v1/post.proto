@@ -1,0 +1,110 @@
+syntax = "proto3";
+
+package api.blog.v1;
+
+import "google/api/annotations.proto";
+import "validate/validate.proto";
+
+option go_package = "blog/api/blog/v1;v1";
+option java_multiple_files = true;
+option java_package = "api.blog.v1";
+
+// PostService 文章服务
+service Post {
+  // Create 发布文章（需 JWT）
+  // HTTP: POST /v1/posts
+  rpc Create(CreatePostRequest) returns (PostInfo) {
+    option (google.api.http) = {
+      post: "/v1/posts"
+      body: "*"
+    };
+  }
+
+  // Get 查看单篇文章
+  // HTTP: GET /v1/posts/{id}
+  rpc Get(GetPostRequest) returns (PostInfo) {
+    option (google.api.http) = {
+      get: "/v1/posts/{id}"
+    };
+  }
+
+  // List 分页列表（可按 tag 过滤）
+  // HTTP: GET /v1/posts?page=&size=&tag=
+  rpc List(ListPostRequest) returns (ListPostReply) {
+    option (google.api.http) = {
+      get: "/v1/posts"
+    };
+  }
+
+  // Update 更新文章（仅作者）
+  // HTTP: PUT /v1/posts/{id}
+  rpc Update(UpdatePostRequest) returns (PostInfo) {
+    option (google.api.http) = {
+      put: "/v1/posts/{id}"
+      body: "*"
+    };
+  }
+
+  // Delete 删除文章（仅作者）
+  // HTTP: DELETE /v1/posts/{id}
+  rpc Delete(DeletePostRequest) returns (DeletePostReply) {
+    option (google.api.http) = {
+      delete: "/v1/posts/{id}"
+    };
+  }
+}
+
+message CreatePostRequest {
+  string title          = 1 [(validate.rules).string = {min_len: 1, max_len: 200}];
+  string body_markdown  = 2 [(validate.rules).string = {min_len: 1, max_len: 100000}];
+  // tags: 0~10 个，每个 tag 长度 1~32
+  repeated string tags  = 3 [(validate.rules).repeated = {max_items: 10, items: {string: {min_len: 1, max_len: 32}}}];
+}
+
+message GetPostRequest {
+  int64 id = 1 [(validate.rules).int64.gt = 0];
+}
+
+message ListPostRequest {
+  // page: 默认 1
+  int32  page = 1 [(validate.rules).int32 = {gte: 0}];
+  // size: 默认 10，最大 100
+  int32  size = 2 [(validate.rules).int32 = {gte: 0, lte: 100}];
+  // tag: 可选，按 tag 过滤
+  string tag  = 3 [(validate.rules).string = {max_len: 32}];
+}
+
+message ListPostReply {
+  repeated PostInfo posts = 1;
+  int64             total = 2;
+  int32             page  = 3;
+  int32             size  = 4;
+}
+
+message UpdatePostRequest {
+  int64             id             = 1 [(validate.rules).int64.gt = 0];
+  string            title          = 2 [(validate.rules).string = {min_len: 1, max_len: 200}];
+  string            body_markdown  = 3 [(validate.rules).string = {min_len: 1, max_len: 100000}];
+  repeated string   tags           = 4 [(validate.rules).repeated = {max_items: 10, items: {string: {min_len: 1, max_len: 32}}}];
+}
+
+message DeletePostRequest {
+  int64 id = 1 [(validate.rules).int64.gt = 0];
+}
+
+message DeletePostReply {
+  bool ok = 1;
+}
+
+// PostInfo 文章完整信息
+message PostInfo {
+  int64           id             = 1;
+  int64           author_id      = 2;
+  string          author_nickname = 3;
+  string          title          = 4;
+  string          body_markdown  = 5;
+  repeated string tags           = 6;
+  int64           likes_count    = 7;
+  string          created_at     = 8; // RFC3339
+  string          updated_at     = 9; // RFC3339
+}

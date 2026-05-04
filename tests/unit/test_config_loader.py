@@ -291,3 +291,108 @@ class TestValidate:
         errors = loader.validate({"run_mode": "invalid"}, layer="basic")
         assert len(errors) == 1
         assert "run_mode" in errors[0]
+
+
+class TestRoleMergeWithBuiltin:
+    """Bug C1 回归：config.advanced.yaml 部分配置应该与 builtin_roles 合并。
+
+    场景：用户只写 ``roles.architect.skills``，不应该把 display_name / persona /
+    memory_scope / scalable 等默认值丢掉。
+    """
+
+    def _setup_workspace(self, ws: Path, advanced: dict) -> None:
+        d = ws / ".ai-rd-team"
+        d.mkdir()
+        (d / "config.yaml").write_text(
+            yaml.safe_dump({"run_mode": "standard"}),
+            encoding="utf-8",
+        )
+        (d / "config.advanced.yaml").write_text(
+            yaml.safe_dump(advanced),
+            encoding="utf-8",
+        )
+
+    def test_partial_role_override_preserves_builtin_memory_scope(
+        self, tmp_workspace: Path
+    ) -> None:
+        """只覆盖 skills 时，memory_scope 应保留 builtin 默认。"""
+        self._setup_workspace(
+            tmp_workspace,
+            {"roles": {"architect": {"skills": ["go-kratos-basics"]}}},
+        )
+        loader = _make_loader(tmp_workspace)
+        config = loader.load(allow_onboarding=False, interactive=False)
+
+        assert "architect" in config.roles
+        arch = config.roles["architect"]
+        # 用户显式覆盖的字段
+        assert arch.skills == ("go-kratos-basics",)
+        # 未显式覆盖的字段应从 builtin 继承
+        assert arch.display_name == "陈架构"
+        assert arch.persona
+        assert "agent_d" in arch.memory_scope
+        assert "tech-stack-selected" in arch.memory_scope["agent_d"]
+
+    def test_partial_role_override_preserves_scalable_flags(self, tmp_workspace: Path) -> None:
+        """覆盖 developer.skills 时，scalable 相关字段应保留 builtin 默认。"""
+        self._setup_workspace(
+            tmp_workspace,
+            {"roles": {"developer": {"skills": ["go-kratos-basics"]}}},
+        )
+        loader = _make_loader(tmp_workspace)
+        config = loader.load(allow_onboarding=False, interactive=False)
+
+        dev = config.roles["developer"]
+        assert dev.skills == ("go-kratos-basics",)
+        # builtin developer 是 scalable: true, default=2, max=5
+        assert dev.scalable is True
+        assert dev.default_instances == 2
+        assert dev.max_instances == 5
+        assert dev.display_name == "林"
+
+    def test_explicit_override_still_works(self, tmp_workspace: Path) -> None:
+        """用户显式写的字段还应该覆盖 builtin 默认。"""
+        self._setup_workspace(
+            tmp_workspace,
+            {
+                "roles": {
+                    "developer": {
+                        "default_instances": 3,
+                        "display_name": "自定义 dev",
+                    }
+                }
+            },
+        )
+        loader = _make_loader(tmp_workspace)
+        config = loader.load(allow_onboarding=False, interactive=False)
+
+        dev = config.roles["developer"]
+        assert dev.default_instances == 3  # 覆盖
+        assert dev.display_name == "自定义 dev"  # 覆盖
+        # 未覆盖的依然是 builtin 的默认
+        assert dev.scalable is True
+        assert dev.max_instances == 5
+
+    def test_custom_role_not_in_builtin_uses_dataclass_defaults(self, tmp_workspace: Path) -> None:
+        """自定义新角色（builtin 没有）用 Role 的 dataclass 默认。"""
+        self._setup_workspace(
+            tmp_workspace,
+            {
+                "roles": {
+                    "security_expert": {
+                        "persona": "你是安全专家",
+                        "skills": ["code-review-checklist"],
+                    }
+                }
+            },
+        )
+        loader = _make_loader(tmp_workspace)
+        config = loader.load(allow_onboarding=False, interactive=False)
+
+        se = config.roles["security_expert"]
+        assert se.persona == "你是安全专家"
+        assert se.skills == ("code-review-checklist",)
+        # 默认值
+        assert se.display_name == ""
+        assert se.scalable is False
+        assert se.memory_scope == {}

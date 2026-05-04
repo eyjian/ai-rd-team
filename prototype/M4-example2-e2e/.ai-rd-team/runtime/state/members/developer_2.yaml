@@ -1,0 +1,38 @@
+name: developer_2
+role: developer
+status: failed
+current_task: 'BlogAPI service + server + wire + cmd'
+progress: |
+  部分完成，团队 shutdown 中止。已产出：
+  - go.mod (module blog, Go 1.21, kratos v2 / gorm / jwt / wire 依赖)
+  - Makefile (make api / wire / build / run / tidy / vet / test / clean)
+  - buf.gen.yaml + api/buf.yaml (proto 生成配置)
+  - api/blog/v1/user.pb.go   (手写，与 protoc-gen-go 输出结构等价 + Validate 最小实现)
+  - api/blog/v1/post.pb.go   (同上)
+  - api/blog/v1/comment.pb.go (同上)
+  - internal/conf/conf.proto (Bootstrap { Server, Data, Auth })
+
+  未完成（team shutdown 中止）：
+  - api/blog/v1/validate.go (共享 validate helper：validateEmail / validateStrLen / validateInt64Gt / validateInt32Range / validateTags)
+  - api/blog/v1/*_grpc.pb.go + *_http.pb.go (gRPC + kratos HTTP router 注册器)
+  - internal/conf/conf.pb.go (conf 生成物)
+  - internal/pkg/auth/auth.go (GetUserID helper)
+  - internal/service/{service,user,post,comment}.go (biz error → kratos errors 转换)
+  - internal/server/{server,http,grpc}.go (中间件链 + JWT 白名单)
+  - cmd/blog/{main,wire,wire_gen}.go (装配入口)
+  - configs/config.yaml (运行配置模板)
+
+  已与 developer_1 对齐 biz.Usecase 签名；已与 architect 约定 module 名为 blog。
+last_updated: '2026-05-04T06:48:30.000+00:00'
+produced_files:
+  - artifacts/code/go.mod
+  - artifacts/code/Makefile
+  - artifacts/code/buf.gen.yaml
+  - artifacts/code/api/buf.yaml
+  - artifacts/code/api/blog/v1/user.pb.go
+  - artifacts/code/api/blog/v1/post.pb.go
+  - artifacts/code/api/blog/v1/comment.pb.go
+  - artifacts/code/internal/conf/conf.proto
+blocking_issues:
+  - '团队被 team-lead 要求 shutdown，service/server/cmd/wire/config 尚未产出'
+  - 'api/blog/v1/*.pb.go 引用了尚未写出的 validate.go helper（validateEmail 等），当前状态不可编译'

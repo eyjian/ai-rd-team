@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package api.blog.v1;
+
+import "google/api/annotations.proto";
+import "validate/validate.proto";
+
+option go_package = "blog/api/blog/v1;v1";
+option java_multiple_files = true;
+option java_package = "api.blog.v1";
+
+// UserService 用户服务
+service User {
+  // Register 用户注册
+  // HTTP: POST /v1/users
+  rpc Register(RegisterRequest) returns (RegisterReply) {
+    option (google.api.http) = {
+      post: "/v1/users"
+      body: "*"
+    };
+  }
+
+  // Login 登录并签发 JWT（7 天）
+  // HTTP: POST /v1/auth/login
+  rpc Login(LoginRequest) returns (LoginReply) {
+    option (google.api.http) = {
+      post: "/v1/auth/login"
+      body: "*"
+    };
+  }
+
+  // GetMe 获取当前登录用户信息（需要 JWT）
+  // HTTP: GET /v1/users/me
+  rpc GetMe(GetMeRequest) returns (UserInfo) {
+    option (google.api.http) = {
+      get: "/v1/users/me"
+    };
+  }
+}
+
+message RegisterRequest {
+  // email: 必填，合法邮箱
+  string email = 1 [(validate.rules).string = {email: true, max_len: 128}];
+  // password: 必填，长度 8~64
+  string password = 2 [(validate.rules).string = {min_len: 8, max_len: 64}];
+  // nickname: 必填，长度 1~32
+  string nickname = 3 [(validate.rules).string = {min_len: 1, max_len: 32}];
+}
+
+message RegisterReply {
+  int64  id        = 1;
+  string email     = 2;
+  string nickname  = 3;
+  string created_at = 4; // RFC3339
+}
+
+message LoginRequest {
+  string email    = 1 [(validate.rules).string = {email: true, max_len: 128}];
+  string password = 2 [(validate.rules).string = {min_len: 8, max_len: 64}];
+}
+
+message LoginReply {
+  // token: JWT，形如 "eyJhbGc..."
+  string token      = 1;
+  // expires_in: token 剩余有效期（秒），固定 604800
+  int64  expires_in = 2;
+  UserInfo user     = 3;
+}
+
+message GetMeRequest {}
+
+message UserInfo {
+  int64  id         = 1;
+  string email      = 2;
+  string nickname   = 3;
+  string created_at = 4; // RFC3339
+}

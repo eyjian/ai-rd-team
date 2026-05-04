@@ -408,18 +408,79 @@ class ConfigLoader:
 
     @staticmethod
     def _build_role(name: str, raw: dict[str, Any]) -> Role:
+        """基于 builtin_roles 默认值构建 Role，仅覆盖 raw 中显式指定的字段。
+
+        这样用户在 config.advanced.yaml 只写 ``roles.architect.skills`` 时，
+        display_name / persona / memory_scope / scalable 等字段仍会保留
+        builtin 默认值（而不是被硬写成空）。
+
+        对于自定义的新角色（不在 builtin 中），使用 Role 的 dataclass 默认值。
+        """
+        # 避免循环 import（builtin_roles 依赖 Role 模型）
+        from ai_rd_team.roles.prompt import builtin_roles
+
+        builtin = builtin_roles().get(name)
+
+        def pick(field: str, builtin_default: Any, fallback: Any) -> Any:
+            if field in raw:
+                return raw[field]
+            if builtin is not None:
+                return builtin_default
+            return fallback
+
+        # skills / rules 允许从 builtin 继承
+        skills_raw = raw.get("skills")
+        if skills_raw is None:
+            skills_raw = list(builtin.skills) if builtin is not None else []
+
+        rules_raw = raw.get("rules")
+        if rules_raw is None:
+            rules_raw = list(builtin.rules) if builtin is not None else []
+
+        memory_scope_raw = raw.get("memory_scope")
+        if memory_scope_raw is None:
+            memory_scope_raw = dict(builtin.memory_scope) if builtin is not None else {}
+
         return Role(
             name=name,
-            enabled=raw.get("enabled", True),
-            display_name=raw.get("display_name", ""),
-            persona=raw.get("persona", ""),
-            scalable=raw.get("scalable", False),
-            max_instances=raw.get("max_instances", 1),
-            default_instances=raw.get("default_instances", 1),
-            skills=tuple(raw.get("skills", [])),
-            rules=tuple(raw.get("rules", [])),
-            memory_scope=raw.get("memory_scope", {}) or {},
-            model=raw.get("model"),
+            enabled=pick(
+                "enabled",
+                builtin.enabled if builtin is not None else True,
+                True,
+            ),
+            display_name=pick(
+                "display_name",
+                builtin.display_name if builtin is not None else "",
+                "",
+            ),
+            persona=pick(
+                "persona",
+                builtin.persona if builtin is not None else "",
+                "",
+            ),
+            scalable=pick(
+                "scalable",
+                builtin.scalable if builtin is not None else False,
+                False,
+            ),
+            max_instances=pick(
+                "max_instances",
+                builtin.max_instances if builtin is not None else 1,
+                1,
+            ),
+            default_instances=pick(
+                "default_instances",
+                builtin.default_instances if builtin is not None else 1,
+                1,
+            ),
+            skills=tuple(skills_raw),
+            rules=tuple(rules_raw),
+            memory_scope=dict(memory_scope_raw) or {},
+            model=pick(
+                "model",
+                builtin.model if builtin is not None else None,
+                None,
+            ),
         )
 
     # ------------------------------------------------------------

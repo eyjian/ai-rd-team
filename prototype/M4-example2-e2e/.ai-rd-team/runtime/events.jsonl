@@ -1,0 +1,8 @@
+{"ts": "2026-05-04T06:40:53.177+00:00", "event": "run_starting", "run_id": "420c175c", "mode": "standard"}
+{"ts": "2026-05-04T06:41:55.627+00:00", "event": "member_spawned", "run_id": "420c175c", "member_id": "architect", "role": "architect"}
+{"ts": "2026-05-04T06:42:35.558+00:00", "event": "member_spawned", "run_id": "420c175c", "member_id": "developer_1", "role": "developer"}
+{"ts": "2026-05-04T06:42:59.281+00:00", "event": "member_spawned", "run_id": "420c175c", "member_id": "developer_2", "role": "developer"}
+{"ts": "2026-05-04T06:43:25.403+00:00", "event": "member_spawned", "run_id": "420c175c", "member_id": "tester", "role": "tester"}
+{"ts": "2026-05-04T06:43:44.626+00:00", "event": "run_started", "run_id": "420c175c", "team_id": "ai-rd-team-420c175c", "member_count": 4}
+{"ts": "2026-05-04T06:46:44.651+00:00", "event": "run_stopping", "run_id": "420c175c", "reason": "m4-blog-e2e-done"}
+{"ts": "2026-05-04T06:52:05.888+00:00", "event": "run_stopped", "run_id": "420c175c", "reason": "m4-blog-e2e-done"}

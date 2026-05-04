@@ -119,9 +119,20 @@ M4 example E2E 发现的 2 个示例配置 bug（commit 将提交）：
   - 修复：所有 examples 的 `config.advanced.yaml` 加 `adapter.bridge_timeout_seconds: 300`
   - 注意：该字段必须放 advanced（basic schema 不包含 adapter）
 
+M4 example2 (BlogAPI) E2E 发现的 1 个代码 bug：
+
+- **C1 ConfigLoader._build_role 完全覆盖，不与 builtin 合并**：
+  - 现象：config.advanced.yaml 只写 `roles.architect.skills` 时，
+    display_name / persona / memory_scope 等字段被默认值覆盖
+  - 根因：`_build_role(name, raw)` 直接用 raw dict 字段的默认值构建 Role，
+    不查询 `builtin_roles()` 的默认
+  - 修复：`_build_role` 改为 merge 语义，仅覆盖 raw 中显式指定的字段，
+    其余从 `builtin_roles()[name]` 继承；builtin 不存在时用 dataclass 默认
+  - 新增 4 个回归测试（TestRoleMergeWithBuiltin）
+
 ### Verified
 
-四次真实 CodeBuddy 环境 E2E 报告：
+五次真实 CodeBuddy 环境 E2E 报告：
 
 - `prototype/M1-real-e2e/REPORT.md`：M1 基础引擎验证
 - `prototype/M2-real-e2e/REPORT.md`：Skills + Memory + Cost + Hook 全链路验证
@@ -133,11 +144,17 @@ M4 example E2E 发现的 2 个示例配置 bug（commit 将提交）：
 - `prototype/M4-example-e2e/VERIFIED.md`：`examples/01-smart-bookmark` 示例端到端验证
   - 成员产出 **28 个 pytest 测试全过** + 可 `pip install -e .` 的命令行工具
   - **自动从 URL 抓取网页 title**（超出需求，展示 Skills 引导的主动性）
-  - 发现并修复 2 个 example 配置 bug（见下方 Fixed）
+  - 发现并修复 2 个 example 配置 bug（见下方 Fixed: E1/E2）
+- `prototype/M4-example2-e2e/VERIFIED.md`：`examples/02-blog-api`（Standard 档 4 成员并行）
+  - architect + developer × 2 + tester 并行工作
+  - **28 文件产出**（proto + schema + biz 层 + pb.go 骨架 + 29 个 t.Run 测试骨架）
+  - **成员自主协作**：dev_2 主动与 architect 约定 module 名；tester 用 app_stub.go 解耦 dev_2 的 wireApp
+  - 虽然 3 分钟内未完成完整项目（go build 差 1 个包），但协作行为验证充分
+  - 发现并修复 1 个代码层 bug（见下方 Fixed: C1）
 
 ### Tested
 
-- 389 个测试全部通过（unit + integration + E2E 烟测）
+- 393 个测试全部通过（unit + integration + E2E 烟测）
 - 整体覆盖率 85%
 - `ruff check` + `ruff format` 全绿
 
