@@ -47,7 +47,7 @@ def version() -> None:
 
 @app.command()
 def skills() -> None:
-    """显示 CodeBuddy marketplace 根目录，指导用户链接到 ~/.codebuddy/plugins/marketplaces/。"""
+    """显示 ai-rd-team CodeBuddy marketplace 根，并给出 codebuddy plugin 安装命令。"""
     from ai_rd_team import codebuddy_marketplace_dir
 
     path = codebuddy_marketplace_dir()
@@ -77,17 +77,18 @@ def skills() -> None:
             console.print(f"  - {s.parent.name}  ([dim]{s.relative_to(path)}[/dim])")
 
     console.print(
-        "\n[bold]安装方式 1：链接为 local marketplace（推荐，零拷贝、代码更新即生效）[/bold]\n"
-        "  [bold]mkdir -p ~/.codebuddy/plugins/marketplaces/[/bold]\n"
-        f"  [bold]ln -s {path} "
-        "~/.codebuddy/plugins/marketplaces/ai-rd-team-marketplace[/bold]\n"
-        '  然后重启 CodeBuddy，在 [dim]插件市场 → ai-rd-team[/dim] 选"为您安装"或'
-        '"本地范围安装"。\n'
-        "\n[bold]安装方式 2：手动复制 Skill 为用户级[/bold]\n"
+        "\n[bold]推荐：通过 CodeBuddy CLI 安装（已真机验证）[/bold]\n"
+        f"  [bold]codebuddy plugin marketplace add {path}[/bold]\n"
+        "  [bold]codebuddy plugin marketplace list[/bold]   "
+        "[dim]# 应能看到 ai-rd-team[/dim]\n"
+        "  [bold]codebuddy plugin install ai-rd-team@ai-rd-team[/bold]\n"
+        "  [dim]# 重启 CodeBuddy IDE，在「插件市场」面板里应能看到 ai-rd-team[/dim]\n"
+        "  [dim]# 点「安装」可选 用户 / 项目 / 本地 三种范围[/dim]\n"
+        "\n[bold]备用：直接拷到用户级 Skill 目录（跳过 marketplace 机制）[/bold]\n"
         "  [bold]mkdir -p ~/.codebuddy/skills/[/bold]\n"
         f"  [bold]cp -r {skills_root}/* ~/.codebuddy/skills/[/bold]\n"
-        "  重启 CodeBuddy，Skill 自动生效（但 plugin 级的更细分安装范围将不可用）。\n"
-        "\n两种方式生效后，在 CodeBuddy 会话里说「启动 ai-rd-team 做 xxx」即可激活。"
+        "  [dim]# 重启 IDE 即可用，但失去插件级管理（安装范围 / 版本 / 卸载）能力[/dim]\n"
+        "\n[dim]详见 docs/01-getting-started.md § 第 2 步。[/dim]"
     )
 
 
