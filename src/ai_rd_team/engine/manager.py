@@ -33,7 +33,12 @@ from ai_rd_team.adapter.codebuddy import CodeBuddyAdapter
 from ai_rd_team.artifacts.recorder import ArtifactRecorder
 from ai_rd_team.config.loader import ConfigLoader
 from ai_rd_team.config.models import EffectiveConfig, Role, RunMode
+from ai_rd_team.memory.manager import MemoryItem, MemoryManager
 from ai_rd_team.roles.prompt import PromptRenderer, builtin_roles
+from ai_rd_team.roles.skills_loader import (
+    LoadedSkill,
+    SkillsLoader,
+)
 from ai_rd_team.runtime.state import RuntimeStateManager
 
 if TYPE_CHECKING:
@@ -114,6 +119,8 @@ class TeamEnvironmentManager:
         self._runtime_state: RuntimeStateManager | None = None
         self._artifact_recorder: ArtifactRecorder | None = None
         self._prompt_renderer: PromptRenderer | None = None
+        self._memory_manager: MemoryManager | None = None
+        self._skills_loader: SkillsLoader | None = None
 
     # ------------------------------------------------------------
     # 状态查询
@@ -171,6 +178,15 @@ class TeamEnvironmentManager:
                 artifacts_dir=runtime_dir / "artifacts",
             )
             self._prompt_renderer = PromptRenderer()
+
+            # M2：Memory + Skills 加载器
+            self._memory_manager = MemoryManager(
+                workspace_memory_dir=self.workspace / ".ai-rd-team" / "memory",
+            )
+            self._memory_manager.ensure_directories()
+            self._skills_loader = SkillsLoader.create_default(
+                workspace=self.workspace / ".ai-rd-team",
+            )
 
             # 3. 创建 Bridge + Adapter（若未注入）
             if self._adapter is None:
@@ -261,11 +277,18 @@ class TeamEnvironmentManager:
 
             for instance_name, role_name in roster:
                 role = self._resolve_role(role_name)
+
+                # M2：加载 Skills 与 agent.d 记忆（失败不影响成员 spawn）
+                skills_section = self._render_skills_section(role)
+                memory_section = self._render_agent_d_section(role)
+
                 rendered = self._prompt_renderer.render(
                     role=role,
                     instance_name=instance_name,
                     config=self._config,
                     team_roster=roster,
+                    skills_injected=skills_section,
+                    agent_d_memory_injected=memory_section,
                 )
                 member = self._adapter.spawn_member(
                     team=team,
@@ -332,6 +355,52 @@ class TeamEnvironmentManager:
             self._state = EngineState.ERROR
             logger.exception("start_run failed")
             raise
+
+    # ------------------------------------------------------------
+    # broadcast（T2.6）
+    # ------------------------------------------------------------
+
+    def broadcast(
+        self,
+        content: str,
+        summary: str = "",
+        from_member: str = "main",
+    ) -> None:
+        """向当前团队广播一条消息。
+
+        - 仅在 RUNNING 状态可用
+        - Adapter 不支持 broadcast 时会抛 CapabilityNotSupportedError
+        - 会记录 broadcast 事件和消息到 runtime/messages/
+
+        Args:
+            content: 广播正文
+            summary: 5-10 字摘要
+            from_member: 发送者（默认 main）
+        """
+        self._ensure_state(EngineState.RUNNING)
+        assert self._adapter is not None
+        assert self._runtime_state is not None
+        assert self._ctx is not None
+
+        self._adapter.broadcast(
+            content=content,
+            summary=summary,
+            from_member=from_member,
+        )
+        self._runtime_state.write_message_record(
+            from_member=from_member,
+            to_member="*",
+            msg_type="broadcast",
+            content=content,
+            summary=summary,
+        )
+        self._runtime_state.append_event(
+            "broadcast_sent",
+            run_id=self._ctx.run_id,
+            from_member=from_member,
+            target_count=len(self._ctx.members),
+            summary=summary,
+        )
 
     # ------------------------------------------------------------
     # stop_run
@@ -482,6 +551,55 @@ class TeamEnvironmentManager:
             return builtin[role_name]
         # 兜底：最小 Role 对象
         return Role(name=role_name)
+
+    # ------------------------------------------------------------
+    # M2：Skills / Memory 注入
+    # ------------------------------------------------------------
+
+    def _render_skills_section(self, role: Role) -> str:
+        """加载并渲染 Skills 为 prompt 片段。失败不抛，返回占位。"""
+        if self._skills_loader is None or not role.skills:
+            return ""
+
+        try:
+            loaded: list[LoadedSkill] = self._skills_loader.load_for_role(
+                role, missing_ok=True
+            )
+        except Exception as e:
+            logger.warning("load skills for role %s failed: %s", role.name, e)
+            return ""
+
+        if not loaded:
+            return ""
+
+        parts: list[str] = []
+        for s in loaded:
+            parts.append(f"## {s.name}（{s.scope}）")
+            parts.append(s.content.strip())
+            parts.append("")
+        return "\n".join(parts).strip()
+
+    def _render_agent_d_section(self, role: Role) -> str:
+        """加载并渲染 agent.d 记忆为 prompt 片段。失败不抛。"""
+        if self._memory_manager is None:
+            return ""
+
+        try:
+            items: list[MemoryItem] = self._memory_manager.load_agent_d(role)
+        except Exception as e:
+            logger.warning("load agent.d for role %s failed: %s", role.name, e)
+            return ""
+
+        if not items:
+            return ""
+
+        parts: list[str] = []
+        for item in items:
+            header = item.title or item.name
+            parts.append(f"## {header}")
+            parts.append(item.content_body.strip())
+            parts.append("")
+        return "\n".join(parts).strip()
 
     @staticmethod
     def _find_starter(members: dict[str, MemberHandle]) -> MemberHandle | None:

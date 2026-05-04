@@ -9,25 +9,42 @@ __version__ = "0.1.0"
 
 
 def skills_dir() -> Path:
-    """返回 ai-rd-team 的 Skills 目录路径。
+    """返回 ai-rd-team 的 CodeBuddy Skills 目录路径。
+
+    这个目录存放 **CodeBuddy Skill 包**（launcher / bridge 等给主 Agent 用的 Skill），
+    与 ``builtin_skills_dir()`` 返回的 **成员级技能 Markdown** 目录不同。
 
     用户可以把此目录链接/复制到 ~/.codebuddy/plugins/marketplaces/local/skills/
     以启用 bridge 和 launcher Skills。
 
-    典型用法：
+    典型用法::
+
         $ python -c "import ai_rd_team; print(ai_rd_team.skills_dir())"
     """
-    # 项目结构：<root>/src/ai_rd_team/__init__.py
-    # Skills 在：<root>/skills/
-    # 从本文件向上走两层到 <root>/src，再上一层到 <root>
     here = Path(__file__).resolve().parent  # .../src/ai_rd_team
-    candidate_src_layout = here.parent.parent / "skills"  # .../skills
-    if candidate_src_layout.is_dir():
+    # 源码布局：<root>/src/ai_rd_team → <root>/skills
+    candidate_src_layout = here.parent.parent / "skills"
+    # 只有包含 CodeBuddy Skill 文件（ai-rd-team-*.md）才认为是 CodeBuddy Skills 目录
+    if candidate_src_layout.is_dir() and any(
+        candidate_src_layout.glob("ai-rd-team-*.md")
+    ):
         return candidate_src_layout
 
-    # 若是 pip install 后的场景（skills 可能以 data_files 或 package_data 形式）
-    # 退化方案：返回本模块目录下的 skills（若存在）
-    return here / "skills"
+    # pip install 场景的退化路径（后续可能改用 importlib.resources）
+    return here / "codebuddy-skills"
 
 
-__all__ = ["__version__", "skills_dir"]
+def builtin_skills_dir() -> Path:
+    """返回成员级内置 Skills（Markdown 文件）的目录。
+
+    这些 Skills 供团队成员（developer / architect 等）加载到 Prompt 中，
+    由 ``ai_rd_team.roles.skills_loader.SkillsLoader`` 使用。
+
+    与 ``skills_dir()`` 返回的 **CodeBuddy Skill 包目录** 区分清楚：
+    - `skills_dir()` → 给 CodeBuddy 主 Agent 用的 launcher/bridge Skill
+    - `builtin_skills_dir()` → 给数字员工用的 python-best-practices / pytest-guide 等
+    """
+    return Path(__file__).resolve().parent / "skills" / "builtin"
+
+
+__all__ = ["__version__", "builtin_skills_dir", "skills_dir"]

@@ -287,6 +287,36 @@ class BaseAdapter(abc.ABC):
             CapabilityNotSupportedError: 如请求 broadcast 但不支持
         """
 
+    def broadcast(
+        self,
+        content: str,
+        summary: str = "",
+        from_member: str = "main",
+    ) -> None:
+        """向团队所有成员广播消息（便捷方法）。
+
+        如果 Adapter 不支持 broadcast，则抛 CapabilityNotSupportedError。
+        具体投递仍由 send_message(BROADCAST) 完成。
+
+        Args:
+            content: 广播正文
+            summary: 5-10 字摘要（部分平台要求）
+            from_member: 发送者（默认 main）
+        """
+        if not self.capabilities.supports_broadcast:
+            raise CapabilityNotSupportedError(
+                f"{self.platform_name} does not support broadcast"
+            )
+        self.send_message(
+            Message(
+                from_member=from_member,
+                to_member="*",  # 约定占位
+                msg_type=MessageType.BROADCAST,
+                content=content,
+                summary=summary,
+            )
+        )
+
     # ------------------------------------------------------------
     # 可选能力（默认不支持，实现类可覆盖）
     # ------------------------------------------------------------

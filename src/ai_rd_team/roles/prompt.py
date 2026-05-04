@@ -324,61 +324,121 @@ class PromptRenderer:
 # ============================================================
 
 
-def builtin_roles() -> dict[str, Role]:
-    """返回 M1 内置的 7 个角色定义。
+# 每个角色的默认 Skills 引用（M2 + T2.4）
+# 说明：
+# - 这些 Skills 来自 builtin（随包分发）或 workspace（用户项目自定义）
+# - 用户可通过 config.advanced.yaml 的 roles.<name>.skills 覆盖
+_DEFAULT_ROLE_SKILLS: dict[str, tuple[str, ...]] = {
+    "pm": (),
+    "analyst": (),
+    "architect": ("code-review-checklist",),
+    "developer": ("python-best-practices", "pytest-guide"),
+    "reviewer": ("code-review-checklist", "python-best-practices"),
+    "tester": ("pytest-guide",),
+    "devops": (),
+}
 
-    M2 之后这些信息会从 config.advanced.yaml 或 presets/ 中读取。
+# 每个角色的默认 agent.d 记忆范围（M2 + T2.4）
+# agent.d 是启动加载、token 敏感的，只引用最常用的几个
+_DEFAULT_ROLE_MEMORY_SCOPE: dict[str, dict[str, list[str]]] = {
+    "pm": {"agent_d": ["team-roster", "current-phase", "key-decisions"]},
+    "analyst": {"agent_d": ["domain-terms", "current-phase"]},
+    "architect": {
+        "agent_d": [
+            "tech-stack-selected",
+            "interface-contracts",
+            "key-decisions",
+        ]
+    },
+    "developer": {
+        "agent_d": ["tech-stack-selected", "interface-contracts"]
+    },
+    "reviewer": {
+        "agent_d": ["tech-stack-selected", "key-decisions"]
+    },
+    "tester": {"agent_d": ["interface-contracts"]},
+    "devops": {"agent_d": ["tech-stack-selected"]},
+}
+
+
+def builtin_roles() -> dict[str, Role]:
+    """返回 M2 内置的 7 个角色定义（含默认 Skills 和 memory_scope）。
+
+    用户可通过 config.advanced.yaml 的 roles.<name> 覆盖任意字段。
     """
-    return {
-        "pm": Role(
-            name="pm",
-            display_name="周立项",
-            persona="你是项目经理周立项，经验丰富，擅长协调和推进。",
-            scalable=False,
+    specs: list[tuple[str, str, str, bool, int, int]] = [
+        # (name, display_name, persona, scalable, default_instances, max_instances)
+        (
+            "pm",
+            "周立项",
+            "你是项目经理周立项，经验丰富，擅长协调和推进。",
+            False,
+            1,
+            1,
         ),
-        "analyst": Role(
-            name="analyst",
-            display_name="沈需求",
-            persona="你是需求分析师沈需求，善于从用户描述中提炼核心价值和边界。",
-            scalable=False,
+        (
+            "analyst",
+            "沈需求",
+            "你是需求分析师沈需求，善于从用户描述中提炼核心价值和边界。",
+            False,
+            1,
+            1,
         ),
-        "architect": Role(
-            name="architect",
-            display_name="陈架构",
-            persona="你是架构师陈架构，注重接口清晰、模块解耦、可演进。",
-            scalable=False,
+        (
+            "architect",
+            "陈架构",
+            "你是架构师陈架构，注重接口清晰、模块解耦、可演进。",
+            False,
+            1,
+            1,
         ),
-        "developer": Role(
-            name="developer",
-            display_name="林",
-            persona="你是开发工程师，按接口契约实现代码，主动与队友协调。",
-            scalable=True,
-            max_instances=5,
-            default_instances=2,
+        (
+            "developer",
+            "林",
+            "你是开发工程师，按接口契约实现代码，主动与队友协调。",
+            True,
+            2,
+            5,
         ),
-        "reviewer": Role(
-            name="reviewer",
-            display_name="王",
-            persona="你是代码检视者，关注质量、风格、潜在 bug，给出具体可操作的建议。",
-            scalable=True,
-            max_instances=3,
-            default_instances=1,
+        (
+            "reviewer",
+            "王",
+            "你是代码检视者，关注质量、风格、潜在 bug，给出具体可操作的建议。",
+            True,
+            1,
+            3,
         ),
-        "tester": Role(
-            name="tester",
-            display_name="赵",
-            persona="你是测试工程师，擅长从边界/异常/正常三类用例覆盖功能。",
-            scalable=True,
-            max_instances=3,
-            default_instances=1,
+        (
+            "tester",
+            "赵",
+            "你是测试工程师，擅长从边界/异常/正常三类用例覆盖功能。",
+            True,
+            1,
+            3,
         ),
-        "devops": Role(
-            name="devops",
-            display_name="钱",
-            persona="你是 DevOps，负责部署、CI/CD、环境准备。",
-            scalable=False,
+        (
+            "devops",
+            "钱",
+            "你是 DevOps，负责部署、CI/CD、环境准备。",
+            False,
+            1,
+            1,
         ),
-    }
+    ]
+
+    result: dict[str, Role] = {}
+    for name, display, persona, scalable, default_i, max_i in specs:
+        result[name] = Role(
+            name=name,
+            display_name=display,
+            persona=persona,
+            scalable=scalable,
+            default_instances=default_i,
+            max_instances=max_i,
+            skills=_DEFAULT_ROLE_SKILLS.get(name, ()),
+            memory_scope=dict(_DEFAULT_ROLE_MEMORY_SCOPE.get(name, {})),
+        )
+    return result
 
 
 __all__ = [
