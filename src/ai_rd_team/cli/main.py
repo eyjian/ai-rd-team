@@ -64,6 +64,7 @@ def skills() -> None:
 
     console.print(
         "\n链接到 CodeBuddy（macOS/Linux）：\n"
+        "  [bold]mkdir -p ~/.codebuddy/plugins/marketplaces/local/skills/[/bold]\n"
         f"  [bold]ln -s {path} "
         "~/.codebuddy/plugins/marketplaces/local/skills/ai-rd-team[/bold]"
     )
