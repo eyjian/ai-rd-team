@@ -1,9 +1,9 @@
 # NEXT — 下次工作时从这里开始
 
 > **用途**：session 交接的单一入口。下次任何人（或 AI session）继续这个项目时，**第一件事就是读这份文档**。
-> **最后更新**：2026-05-04 21:30（marketplace 三种安装方式全部真机验证后）
-> **当前版本**：`0.1.0b1` beta（本地可装，**未发 PyPI**）
-> **仓库状态**：`main` 分支 clean，已同步 origin
+> **最后更新**：2026-05-04 22:00（M7 提案敲定，准备实施）
+> **当前版本**：`0.1.0b1` beta（本地可装，**未发 PyPI**）；**即将 bump 到 `0.2.0a1`**（M7 BREAKING）
+> **仓库状态**：`main` 分支有未提交的 M7 提案修订
 
 ---
 
@@ -26,10 +26,11 @@ ls docs/follow-ups/ 2>/dev/null         # 阻塞的 follow-up
 
 | 项 | 值 |
 |---|---|
-| 版本 | `0.1.0b1` beta |
-| 已完成里程碑 | M1 + M2 + M3 + M4 + M5 + M6（M6 非规划，临时修复 CodeBuddy marketplace 目录结构） |
+| 版本 | `0.1.0b1` beta（M7 完成后 → `0.2.0a1`） |
+| 已完成里程碑 | M1 + M2 + M3 + M4 + M5 + M6 |
+| 进行中里程碑 | **M7**（relocate-artifacts-to-root，提案已敲定） |
 | 测试 | 425 passed / coverage 83% / ruff 全绿 |
-| 活跃 openspec change | 0 |
+| 活跃 openspec change | **1**（`relocate-artifacts-to-root`，0/37 tasks） |
 | 正式 spec | `adapter-bridge-auto-responder`（M5 归档产物） |
 | PyPI | ❌ 未发布（用户决定暂缓，先手工安装） |
 | 本地产物 | `dist/ai_rd_team-0.1.0b1-{.whl,.tar.gz}`（git 忽略，**M6 后需重建**因为结构变了） |
@@ -39,7 +40,17 @@ ls docs/follow-ups/ 2>/dev/null         # 阻塞的 follow-up
 
 ## 🔄 进行中的工作
 
-（无）
+### M7 · relocate-artifacts-to-root（交付物落位到项目根）
+- **状态**：提案已收敛、openspec validate 通过、准备实施
+- **位置**：`openspec/changes/relocate-artifacts-to-root/`（proposal + design + tasks + specs/artifact-placement）
+- **预算**：2-3 天 / 37 tasks / 7 组
+- **核心变更**：
+  - 代码 / docs / tests / 部署脚本 → 项目根（由架构师 `ProjectLayout` 决定子路径）
+  - `.ai-rd-team/` 只存过程数据（review/reports/state/logs/cost/messages/adapter/archive/memory/manifest）
+  - `ArtifactRecorder` 拆成 5 个 write_* 方法，老 API 直接删
+  - 版本号 bump `0.1.0b1` → `0.2.0a1`（BREAKING）
+- **不做**：`migrate` CLI、DeprecationWarning 兼容层（beta 期硬切）
+- **下一步**：按 tasks.md 第 1 组开始实施（ProjectLayout 数据层）
 
 ## ⏸️ 暂停/待定决策
 

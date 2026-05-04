@@ -251,6 +251,41 @@
 
 ---
 
+## 6B. M7：交付物落位到项目根（~2-3 天）🚧 进行中
+
+**目标**：把"最终交付物"（代码 / 文档 / 测试 / 部署脚本）从 `.ai-rd-team/runtime/artifacts/` 挪到项目根目录，让用户打开工作区立刻看到产物；`.ai-rd-team/` 只保留"过程数据 + 元数据"。
+
+**动因**：2026-05-04 blog-api E2E 后用户反馈"代码埋在 `.ai-rd-team/runtime/artifacts/code/mysh/` 四层深的位置，打开项目根空荡荡"；且 `openspec/specs/design/07-artifacts.md §4.3` 一年前就写过 `in_place` 是推荐默认，实际退化为 `artifacts_only`，本 change 兑现原设计意图 + 扩展到所有类型产物。
+
+**关联变更**：`openspec/changes/relocate-artifacts-to-root/`
+
+### 6B.1 范围
+
+✅ **包含**：
+- 新增 `ProjectLayout` 数据层（6 档默认 + 架构师 `data-project-layout.yaml` 覆盖）
+- `ArtifactRecorder` 重构为 5 个 write_* 分派方法（`write_code` / `write_doc` / `write_test` / `write_deploy` / `write_process`）
+- `manifest.yaml` 位置提升到 `runtime/`，path 语义二分（delivery 相对项目根 / process 相对 runtime）
+- 角色 Prompt / Skills 路径引导更新
+- `docs/07-artifact-placement.md` 用户手册 + `07-artifacts.md` 设计文档重写
+- 四个 examples 的 EXPECTED_OUTPUTS 路径更新
+- 版本号 bump 到 `0.2.0a1`（BREAKING）
+
+❌ **不包含**（已收敛）：
+- 不提供 `ai-rd-team migrate` CLI（老 workspace 删 `runtime/artifacts/` 重跑即可）
+- 不保留老 `write()` / `write_raw()` API 的 DeprecationWarning 兼容层（beta 期硬切）
+- 不支持多项目 workspace / monorepo 子嵌套
+
+### 6B.2 验收
+
+- ✅ `pytest -q` 全绿（≥ 425 + 新增 ≥ 35）
+- ✅ `ruff check .` 全绿
+- ✅ example 02 blog-api 真实 E2E：代码落到项目根（`examples/02-blog-api/<workspace>/mysh/*.go` 等），不再在 `artifacts/code/` 下
+- ✅ manifest 在 `<workspace>/.ai-rd-team/runtime/manifest.yaml`，每条 entry 有 `category: delivery|process`
+- ✅ `openspec validate relocate-artifacts-to-root --strict` 通过
+- ✅ CHANGELOG 标 BREAKING + 迁移指南，openspec archive 归档
+
+---
+
 ## 7. 关键风险与应对
 
 | 风险 | 可能性 | 影响 | 应对 |
