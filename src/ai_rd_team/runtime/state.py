@@ -40,7 +40,7 @@ def utc_now_iso() -> str:
     return now.isoformat(timespec="milliseconds")
 
 
-# runtime/ 下的所有子目录
+# runtime/ 下的所有子目录（M7 后：只保留过程数据相关，交付物去项目根）
 _RUNTIME_SUBDIRS = [
     "state",
     "state/members",
@@ -50,14 +50,9 @@ _RUNTIME_SUBDIRS = [
     "adapter-intents",
     "adapter-results",
     "cost",
-    "artifacts",
-    "artifacts/design",
-    "artifacts/code",
-    "artifacts/test",
-    "artifacts/review",
-    "artifacts/requirements",
-    "artifacts/deployment",
-    "artifacts/reports",
+    # 过程数据三目录（M7 新）——对齐 ArtifactRecorder.write_process 的 VALID_PROCESS_KINDS
+    "review",
+    "reports",
     "logs",
     "archive",
 ]

@@ -170,33 +170,74 @@ def list_events(
 
 @router.get("/artifacts")
 def list_artifacts(request: Request) -> dict:
-    artifacts_dir = _runtime(request) / "artifacts"
-    if not artifacts_dir.is_dir():
-        return {"artifacts": [], "count": 0, "manifest": {}}
+    """列出 manifest 中登记的所有制品。
 
-    manifest = _read_yaml(artifacts_dir / "manifest.yaml")
+    M7 后 manifest 在 `<runtime>/manifest.yaml`（不再是 `runtime/artifacts/manifest.yaml`），
+    path 语义二分：
+    - category=="delivery"：path 相对项目根
+    - category=="process"：path 相对 runtime_dir
+    返回每条 entry + 额外字段 `size`（通过解析到的绝对路径 stat）和 `exists`（文件是否仍存在）。
+    """
+    runtime_dir = _runtime(request)
+    workspace = _workspace(request)
 
-    # 扫描文件
-    files = []
-    for p in artifacts_dir.rglob("*"):
-        if p.is_file() and p.name not in ("manifest.yaml",):
-            rel = p.relative_to(artifacts_dir)
-            files.append(
-                {
-                    "path": str(rel).replace("\\", "/"),
-                    "size": p.stat().st_size,
-                    "category": rel.parts[0] if rel.parts else "",
-                }
-            )
-    return {"artifacts": files, "count": len(files), "manifest": manifest}
+    manifest_path = runtime_dir / "manifest.yaml"
+    manifest = _read_yaml(manifest_path)
+
+    entries = manifest.get("artifacts", []) if isinstance(manifest, dict) else []
+    enriched: list[dict] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        rel = str(entry.get("path", ""))
+        category = str(entry.get("category", ""))
+        if category == "delivery":
+            abs_path = workspace / rel
+        elif category == "process":
+            abs_path = runtime_dir / rel
+        else:
+            # 未知 category：尝试按 process 兜底（老数据兼容）
+            abs_path = runtime_dir / rel
+
+        size = None
+        exists = False
+        try:
+            if abs_path.is_file():
+                size = abs_path.stat().st_size
+                exists = True
+        except OSError:
+            pass
+
+        enriched.append(
+            {
+                **entry,
+                "size": size,
+                "exists": exists,
+            }
+        )
+
+    return {
+        "artifacts": enriched,
+        "count": len(enriched),
+        "manifest": {
+            "last_updated": manifest.get("last_updated") if isinstance(manifest, dict) else None
+        },
+    }
 
 
 @router.get("/artifacts/file")
 def read_artifact_file(
     request: Request,
     path: str = Query(...),
+    category: str = Query("delivery"),
 ) -> dict:
-    base = _runtime(request) / "artifacts"
+    """读一个制品文件。
+
+    `category` 决定 path 解析基：
+    - delivery（默认）：相对项目根
+    - process：相对 runtime_dir
+    """
+    base = _runtime(request) if category == "process" else _workspace(request)
     target = _safe_path(base, path)
     if not target.is_file():
         raise HTTPException(status_code=404, detail="file not found")

@@ -50,7 +50,7 @@
 #### Scenario: 过程数据写到 runtime/<kind>/
 
 - **WHEN** 调 `write_process(kind="review", name="spec-review-user", content=..., producer="reviewer", ext="md")`
-- **THEN** 文件 SHALL 写入 `<project_root>/.ai-rd-team/runtime/review/spec-review-user.md`，manifest 记 `{path: "spec-review-user.md", kind: "review", category: "process"}`（path 相对 runtime_dir）
+- **THEN** 文件 SHALL 写入 `<project_root>/.ai-rd-team/runtime/review/spec-review-user.md`，manifest 记 `{path: "review/spec-review-user.md", kind: "review", category: "process"}`（path 相对 runtime_dir，含 kind 子目录前缀以便区分同名文件）
 
 #### Scenario: 非法 kind 拒绝
 
@@ -69,7 +69,7 @@
 #### Scenario: 过程 path 为 runtime 相对
 
 - **WHEN** `write_process(kind="report", name="report-phase-dev", ext="md", ...)` 成功
-- **THEN** manifest 新条目 MUST 满足 `path == "report-phase-dev.md"`，`category == "process"`
+- **THEN** manifest 新条目 MUST 满足 `path == "report/report-phase-dev.md"`（含 kind 子目录前缀），`category == "process"`
 
 #### Scenario: 老位置 manifest 触发迁移提示
 

@@ -96,12 +96,25 @@ def app_client(tmp_workspace: Path) -> TestClient:
         encoding="utf-8",
     )
 
-    # 制品
-    art_dir = runtime / "artifacts" / "code"
-    art_dir.mkdir(parents=True)
-    (art_dir / "hello.py").write_text("print('hi')\n", encoding="utf-8")
-    (runtime / "artifacts" / "manifest.yaml").write_text(
-        yaml.safe_dump({"artifacts": [{"path": "code/hello.py"}]}),
+    # 制品（M7：交付物落项目根，manifest 在 runtime/manifest.yaml）
+    code_dir = tmp_workspace / "code"
+    code_dir.mkdir(parents=True)
+    (code_dir / "hello.py").write_text("print('hi')\n", encoding="utf-8")
+    (runtime / "manifest.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "artifacts": [
+                    {
+                        "path": "code/hello.py",
+                        "kind": "code",
+                        "category": "delivery",
+                        "producer": "developer_1",
+                        "created_at": "2026-05-04T00:00:00",
+                    }
+                ],
+                "last_updated": "2026-05-04T00:00:00",
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -287,10 +300,16 @@ class TestArtifacts:
         assert r.status_code == 200
         data = r.json()
         assert data["count"] == 1
-        assert data["artifacts"][0]["path"] == "code/hello.py"
-        assert data["artifacts"][0]["category"] == "code"
+        entry = data["artifacts"][0]
+        # M7 后：path 是项目根相对；category 是 delivery/process
+        assert entry["path"] == "code/hello.py"
+        assert entry["category"] == "delivery"
+        assert entry["kind"] == "code"
+        assert entry["exists"] is True
+        assert entry["size"] > 0
 
     def test_read_artifact_file(self, app_client: TestClient) -> None:
+        # M7 后：默认 category=delivery（相对项目根）
         r = app_client.get("/api/artifacts/file?path=code/hello.py")
         assert r.status_code == 200
         assert "print" in r.json()["content"]

@@ -14,6 +14,18 @@ from string import Template
 from ai_rd_team.config.models import EffectiveConfig, Role
 
 # 角色 → 制品子目录映射（§7.5）
+#
+# M7 后语义变化：
+# - 落位决策**已由 ArtifactRecorder.write_* + ProjectLayout 接管**，本映射不再是"硬编码目录"
+# - 这里保留的目录名仅作为 prompt 模板里 `$role_dir` 占位符的**人类可读 hint**
+#   （比如告诉 reviewer "你的工作区在 review/"），而不是真实落盘路径
+# - 真实落盘：
+#   * architect / analyst → 项目根 docs/<category>/...（write_doc）
+#   * developer → 项目根 <code_dirs[module]>/...（write_code）
+#   * tester → 按 layout.tests_mode 走 tests/ 或代码旁（write_test）
+#   * devops → 项目根 <deploy_root>/... 或根级文件（write_deploy）
+#   * reviewer / pm → <workspace>/.ai-rd-team/runtime/{review,reports}/...（write_process）
+# - 阶段 4 会重写 prompt 模板，届时这个映射可能整体移除
 ROLE_TO_DIR: dict[str, str] = {
     "pm": "reports",
     "analyst": "requirements",
@@ -22,6 +34,18 @@ ROLE_TO_DIR: dict[str, str] = {
     "reviewer": "review",
     "tester": "test",
     "devops": "deployment",
+}
+
+# 角色 → ArtifactRecorder 的 write_* 方法名（M7 新）
+# 用于模板渲染、Skills 文本生成等"需要知道该用哪个 write_* 方法"的场景
+ROLE_TO_WRITE_METHOD: dict[str, str] = {
+    "pm": "write_process",  # 阶段报告 / run summary 进 runtime/reports/
+    "analyst": "write_doc",  # 需求文档进 docs/requirements/
+    "architect": "write_doc",  # 架构文档进 docs/design/
+    "developer": "write_code",  # 代码进项目根 <code_dir>/
+    "reviewer": "write_process",  # 评审进 runtime/review/
+    "tester": "write_test",  # 测试按 layout 路由
+    "devops": "write_deploy",  # 部署进项目根或 deploy/
 }
 
 # M1 内嵌模板（基于 P1 验证的有效格式）
@@ -438,8 +462,9 @@ def builtin_roles() -> dict[str, Role]:
 
 
 __all__ = [
+    "ROLE_TO_DIR",
+    "ROLE_TO_WRITE_METHOD",
     "PromptRenderer",
     "RenderedPrompt",
-    "ROLE_TO_DIR",
     "builtin_roles",
 ]

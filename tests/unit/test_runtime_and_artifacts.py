@@ -1,4 +1,4 @@
-"""测试 RuntimeStateManager（T1.11）和 ArtifactRecorder（T1.12）。"""
+"""测试 RuntimeStateManager（T1.11）和 ArtifactRecorder（T1.12 / M7 重构）。"""
 
 from __future__ import annotations
 
@@ -7,9 +7,15 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
 import yaml
 
-from ai_rd_team.artifacts.recorder import ArtifactRecorder
+from ai_rd_team.artifacts.layout import DEFAULT_LAYOUTS, ProjectLayout
+from ai_rd_team.artifacts.recorder import (
+    CATEGORY_DELIVERY,
+    CATEGORY_PROCESS,
+    ArtifactRecorder,
+)
 from ai_rd_team.runtime.state import RuntimeStateManager, utc_now_iso
 
 
@@ -38,6 +44,7 @@ class TestRuntimeStateManager:
         rsm = RuntimeStateManager(runtime_dir=tmp_path)
         rsm.ensure_directories()
 
+        # M7 后 runtime/ 只保留过程数据相关目录，交付物去项目根（见 ArtifactRecorder）
         for sub in [
             "state",
             "state/members",
@@ -47,13 +54,18 @@ class TestRuntimeStateManager:
             "adapter-intents",
             "adapter-results",
             "cost",
-            "artifacts",
-            "artifacts/design",
-            "artifacts/code",
+            "review",
+            "reports",
             "logs",
             "archive",
         ]:
             assert (tmp_path / sub).is_dir()
+
+        # M7 后老的 artifacts/** 不应被自动创建
+        for legacy in ["artifacts", "artifacts/code", "artifacts/design"]:
+            assert not (tmp_path / legacy).exists(), (
+                f"legacy subdir {legacy} should not be created after M7"
+            )
 
     def test_write_run_metadata(self, tmp_path: Path) -> None:
         rsm = RuntimeStateManager(runtime_dir=tmp_path)
@@ -178,122 +190,238 @@ class TestRuntimeStateManager:
 
 
 class TestArtifactRecorder:
-    def test_write_basic(self, tmp_path: Path) -> None:
-        rec = ArtifactRecorder(artifacts_dir=tmp_path)
-        path = rec.write(
-            role_name="architect",
-            kind="spec",
-            name="design",
-            ext="md",
-            content="# 架构设计\n接口...",
-            producer="architect",
+    """M7：ArtifactRecorder 新接口（5 个 write_* 方法）冒烟测试。
+
+    更深入的 layout × 方法组合覆盖见 test_recorder_layout.py。
+    """
+
+    def _make_recorder(
+        self, tmp_path: Path, layout: ProjectLayout | None = None
+    ) -> ArtifactRecorder:
+        project_root = tmp_path / "project"
+        runtime_dir = project_root / ".ai-rd-team" / "runtime"
+        project_root.mkdir(parents=True, exist_ok=True)
+        return ArtifactRecorder(
+            project_root=project_root,
+            runtime_dir=runtime_dir,
+            layout=layout or DEFAULT_LAYOUTS["fallback"],
         )
 
-        # 路径符合规范
-        assert path == tmp_path / "design" / "spec-design.md"
-        assert path.is_file()
-        assert path.read_text(encoding="utf-8").startswith("# 架构设计")
+    def test_old_signature_rejected(self, tmp_path: Path) -> None:
+        """老 `ArtifactRecorder(artifacts_dir=...)` 签名应报 TypeError。"""
+        with pytest.raises(TypeError):
+            ArtifactRecorder(artifacts_dir=tmp_path)  # type: ignore[call-arg]
 
-    def test_write_with_owner_prefix(self, tmp_path: Path) -> None:
-        rec = ArtifactRecorder(artifacts_dir=tmp_path)
-        path = rec.write(
-            role_name="developer",
-            kind="log",
-            name="progress",
-            ext="md",
-            content="...",
-            producer="developer_1",
-            owner_prefix="developer_1",
-        )
-        assert path.name == "developer_1-log-progress.md"
-
-    def test_manifest_updated(self, tmp_path: Path) -> None:
-        rec = ArtifactRecorder(artifacts_dir=tmp_path)
-        rec.write(
-            role_name="architect",
-            kind="spec",
-            name="design",
-            ext="md",
-            content="...",
-            producer="architect",
-        )
-        rec.write(
-            role_name="developer",
-            kind="log",
-            name="progress",
-            ext="md",
-            content="...",
+    def test_write_code_falls_back_to_module_name(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path, DEFAULT_LAYOUTS["go"])
+        path = rec.write_code(
+            module="mysh",
+            filename="main.go",
+            content="package main\n",
             producer="developer_1",
         )
+        assert path == tmp_path / "project" / "mysh" / "main.go"
+        assert path.read_text() == "package main\n"
 
-        data = rec.read_manifest()
-        assert len(data["artifacts"]) == 2
-        assert data["last_updated"]
+    def test_write_code_honors_layout(self, tmp_path: Path) -> None:
+        layout = DEFAULT_LAYOUTS["go"].with_overrides(
+            {"code_dirs": {"backend": "services/backend"}}
+        )
+        rec = self._make_recorder(tmp_path, layout)
+        path = rec.write_code(
+            module="backend",
+            filename="server.go",
+            content="",
+            producer="developer_1",
+        )
+        assert path == tmp_path / "project" / "services" / "backend" / "server.go"
 
-        kinds = {a["kind"] for a in data["artifacts"]}
-        assert kinds == {"spec", "log"}
-
-    def test_manifest_overwrite_same_path(self, tmp_path: Path) -> None:
-        """同路径写两次只保留一条 manifest 记录。"""
-        rec = ArtifactRecorder(artifacts_dir=tmp_path)
-        rec.write(
-            role_name="architect",
-            kind="spec",
-            name="design",
-            ext="md",
-            content="v1",
+    def test_write_doc_goes_to_docs_root(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path)
+        path = rec.write_doc(
+            category="design",
+            filename="ARCHITECTURE.md",
+            content="# 架构",
             producer="architect",
         )
-        rec.write(
-            role_name="architect",
-            kind="spec",
-            name="design",
-            ext="md",
-            content="v2",  # 覆盖
-            producer="architect",
-        )
+        assert path == tmp_path / "project" / "docs" / "design" / "ARCHITECTURE.md"
 
-        data = rec.read_manifest()
-        assert len(data["artifacts"]) == 1
-
-        # 内容已更新
-        path = tmp_path / "design" / "spec-design.md"
-        assert path.read_text() == "v2"
-
-    def test_invalid_kind_raises(self, tmp_path: Path) -> None:
-        import pytest
-
-        rec = ArtifactRecorder(artifacts_dir=tmp_path)
-        with pytest.raises(ValueError, match="unknown artifact kind"):
-            rec.write(
-                role_name="architect",
-                kind="bogus",
-                name="x",
-                ext="md",
+    def test_write_doc_rejects_unknown_category(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path)
+        with pytest.raises(ValueError, match="invalid category"):
+            rec.write_doc(
+                category="unknown",
+                filename="x.md",
                 content="",
                 producer="architect",
             )
 
-    def test_list_artifacts_filtering(self, tmp_path: Path) -> None:
-        rec = ArtifactRecorder(artifacts_dir=tmp_path)
-        rec.write("architect", "spec", "a", "md", "", "architect")
-        rec.write("architect", "log", "b", "md", "", "architect")
-        rec.write("developer", "log", "c", "md", "", "developer_1")
+    def test_write_test_separate_mode(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path, DEFAULT_LAYOUTS["python"])
+        path = rec.write_test(
+            module=None,
+            filename="test_user.py",
+            content="",
+            producer="tester",
+        )
+        assert path == tmp_path / "project" / "tests" / "test_user.py"
 
-        assert len(rec.list_artifacts()) == 3
-        assert len(rec.list_artifacts(kind="log")) == 2
-        assert len(rec.list_artifacts(producer="developer_1")) == 1
+    def test_write_test_alongside_mode(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path, DEFAULT_LAYOUTS["go"])
+        path = rec.write_test(
+            module="mysh",
+            filename="user_test.go",
+            content="",
+            producer="tester",
+        )
+        assert path == tmp_path / "project" / "mysh" / "user_test.go"
 
-    def test_write_raw(self, tmp_path: Path) -> None:
-        """write_raw 允许任意文件名。"""
-        rec = ArtifactRecorder(artifacts_dir=tmp_path)
-        path = rec.write_raw(
-            role_name="developer",
-            filename="user-api.go",
-            content="package user\n",
+    def test_write_test_alongside_requires_module(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path, DEFAULT_LAYOUTS["go"])
+        with pytest.raises(ValueError, match="alongside mode requires module"):
+            rec.write_test(
+                module=None,
+                filename="x.go",
+                content="",
+                producer="tester",
+            )
+
+    def test_write_deploy_root_level_file(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path)
+        path = rec.write_deploy(
+            filename="Dockerfile",
+            content="FROM python:3.11\n",
+            producer="devops",
+        )
+        assert path == tmp_path / "project" / "Dockerfile"
+
+    def test_write_deploy_subdir_file(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path)
+        path = rec.write_deploy(
+            filename="k8s-user.yaml",
+            content="",
+            producer="devops",
+        )
+        assert path == tmp_path / "project" / "deploy" / "k8s-user.yaml"
+
+    def test_write_process_to_runtime(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path)
+        path = rec.write_process(
+            kind="review",
+            name="spec-review-user",
+            content="# Review\n",
+            producer="reviewer",
+        )
+        assert (
+            path
+            == tmp_path / "project" / ".ai-rd-team" / "runtime" / "review" / "spec-review-user.md"
+        )
+
+    def test_write_process_rejects_unknown_kind(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path)
+        with pytest.raises(ValueError, match="invalid kind"):
+            rec.write_process(
+                kind="delivery",
+                name="x",
+                content="",
+                producer="pm",
+            )
+
+    def test_manifest_stores_delivery_path_relative_to_project_root(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path, DEFAULT_LAYOUTS["go"])
+        rec.write_code(
+            module="mysh",
+            filename="main.go",
+            content="",
             producer="developer_1",
         )
-        assert path.name == "user-api.go"
-        # manifest 中推断 kind
-        items = rec.list_artifacts()
-        assert len(items) == 1
+
+        manifest = rec.read_manifest()
+        assert len(manifest["artifacts"]) == 1
+        entry = manifest["artifacts"][0]
+        assert entry["path"] == "mysh/main.go"
+        assert entry["category"] == CATEGORY_DELIVERY
+        assert entry["kind"] == "code"
+        assert entry["producer"] == "developer_1"
+
+    def test_manifest_stores_process_path_relative_to_runtime(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path)
+        rec.write_process(
+            kind="report",
+            name="report-phase-dev",
+            content="",
+            producer="pm",
+        )
+        manifest = rec.read_manifest()
+        entry = manifest["artifacts"][0]
+        # path 含 kind 子目录前缀，以便在同一 manifest 中区分同名文件
+        assert entry["path"] == "report/report-phase-dev.md"
+        assert entry["category"] == CATEGORY_PROCESS
+
+    def test_manifest_location_under_runtime(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path)
+        assert rec.manifest_path == (
+            tmp_path / "project" / ".ai-rd-team" / "runtime" / "manifest.yaml"
+        )
+
+    def test_manifest_overwrite_same_path_same_category(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path, DEFAULT_LAYOUTS["go"])
+        rec.write_code(module="mysh", filename="main.go", content="v1", producer="d1")
+        rec.write_code(module="mysh", filename="main.go", content="v2", producer="d1")
+
+        manifest = rec.read_manifest()
+        assert len(manifest["artifacts"]) == 1
+        path = tmp_path / "project" / "mysh" / "main.go"
+        assert path.read_text() == "v2"
+
+    def test_list_artifacts_filtering(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path, DEFAULT_LAYOUTS["go"])
+        rec.write_code(module="mysh", filename="main.go", content="", producer="d1")
+        rec.write_code(module="mysqler", filename="main.go", content="", producer="d2")
+        rec.write_process(kind="review", name="r1", content="", producer="reviewer")
+
+        assert len(rec.list_artifacts()) == 3
+        assert len(rec.list_artifacts(category=CATEGORY_DELIVERY)) == 2
+        assert len(rec.list_artifacts(category=CATEGORY_PROCESS)) == 1
+        assert len(rec.list_artifacts(producer="d1")) == 1
+        assert len(rec.list_artifacts(kind="code")) == 2
+
+    def test_legacy_manifest_warning(self, tmp_path: Path, caplog) -> None:
+        """发现老位置的 manifest.yaml 时应打 warning 指引迁移。"""
+        project_root = tmp_path / "project"
+        runtime_dir = project_root / ".ai-rd-team" / "runtime"
+        legacy = runtime_dir / "artifacts"
+        legacy.mkdir(parents=True, exist_ok=True)
+        (legacy / "manifest.yaml").write_text("artifacts: []\n", encoding="utf-8")
+
+        with caplog.at_level("WARNING"):
+            ArtifactRecorder(
+                project_root=project_root,
+                runtime_dir=runtime_dir,
+                layout=DEFAULT_LAYOUTS["fallback"],
+            )
+        assert any("legacy manifest" in rec.message for rec in caplog.records)
+
+    def test_filename_with_slash_rejected(self, tmp_path: Path) -> None:
+        rec = self._make_recorder(tmp_path)
+        with pytest.raises(ValueError, match="simple name"):
+            rec.write_code(
+                module="main",
+                filename="nested/main.go",
+                content="",
+                producer="developer_1",
+            )
+
+    def test_write_doc_flat_subdirs_via_override(self, tmp_path: Path) -> None:
+        """架构师把 docs_subdirs[category] 置空实现扁平化。"""
+        layout = DEFAULT_LAYOUTS["python"].with_overrides(
+            {"docs_subdirs": {"design": "", "requirements": "", "delivery": "", "research": ""}}
+        )
+        rec = self._make_recorder(tmp_path, layout)
+        path = rec.write_doc(
+            category="design",
+            filename="ARCHITECTURE.md",
+            content="",
+            producer="architect",
+        )
+        assert path == tmp_path / "project" / "docs" / "ARCHITECTURE.md"

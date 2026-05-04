@@ -191,8 +191,20 @@ class TeamEnvironmentManager:
             self._runtime_state = RuntimeStateManager(runtime_dir=runtime_dir)
             self._runtime_state.ensure_directories()
 
+            # M7：按 ProjectLayout 加载顺序决定交付物落位
+            # 优先级：架构师 yaml > config.artifacts.layout > memory 推断 > fallback
+            from ai_rd_team.artifacts import layout as _layout_mod
+            from ai_rd_team.artifacts.layout import DEFAULT_LAYOUTS
+
+            layout = self._resolve_project_layout(
+                runtime_dir=runtime_dir,
+                layout_module=_layout_mod,
+                default_fallback=DEFAULT_LAYOUTS["fallback"],
+            )
             self._artifact_recorder = ArtifactRecorder(
-                artifacts_dir=runtime_dir / "artifacts",
+                project_root=self.workspace,
+                runtime_dir=runtime_dir,
+                layout=layout,
             )
             self._prompt_renderer = PromptRenderer()
 
@@ -887,6 +899,93 @@ class TeamEnvironmentManager:
             return builtin[role_name]
         # 兜底：最小 Role 对象
         return Role(name=role_name)
+
+    def _resolve_project_layout(
+        self,
+        runtime_dir: Path,
+        layout_module,
+        default_fallback,
+    ):
+        """M7：按优先级确定 ProjectLayout。
+
+        优先级：
+        1. `<runtime_dir>/reports/data-project-layout.yaml`（架构师运行时声明）
+        2. `config.advanced.yaml:artifacts.layout`（通过 EffectiveConfig 暴露）
+        3. memory `agent.d/tech-stack-selected.md` 关键词推断
+        4. ``default_fallback``
+
+        记录到 events.jsonl 以便调试（若 runtime 已初始化）。
+        """
+        # 1. 架构师声明
+        yaml_path = runtime_dir / "reports" / "data-project-layout.yaml"
+        if yaml_path.is_file():
+            layout = layout_module.from_yaml(yaml_path)
+            self._log_layout_source("yaml", str(yaml_path))
+            return layout
+
+        # 2. config.advanced.yaml:artifacts.layout
+        cfg_layout = self._layout_from_config(layout_module)
+        if cfg_layout is not None:
+            self._log_layout_source("config", "config.advanced.yaml:artifacts.layout")
+            return cfg_layout
+
+        # 3. memory 推断
+        memory_root = self.workspace / ".ai-rd-team" / "memory"
+        memory_layout = self._layout_from_memory_path(memory_root, layout_module)
+        if memory_layout is not None:
+            self._log_layout_source("memory", str(memory_root))
+            return memory_layout
+
+        # 4. fallback
+        self._log_layout_source("fallback", "DEFAULT_LAYOUTS[fallback]")
+        return default_fallback
+
+    def _layout_from_config(self, layout_module):
+        """从 EffectiveConfig.artifacts.layout（若存在）构造 layout。
+
+        ``config.artifacts`` 形如 `{"layout": {"base": "go", "overrides": {...}}}`；
+        base 不存在时按 fallback 处理；任意解析失败返回 None 让下一级接管。
+        """
+        try:
+            if self._config is None:
+                return None
+            artifacts_cfg = getattr(self._config, "artifacts", None)
+            if not isinstance(artifacts_cfg, dict):
+                return None
+            layout_cfg = artifacts_cfg.get("layout")
+            if not isinstance(layout_cfg, dict):
+                return None
+            base_name = str(layout_cfg.get("base") or "fallback")
+            base = layout_module.get_default_layout(base_name)
+            overrides = layout_cfg.get("overrides") or {}
+            if isinstance(overrides, dict) and overrides:
+                return base.with_overrides(overrides)
+            return base
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("layout from config failed (%s), falling through", exc)
+            return None
+
+    def _layout_from_memory_path(self, memory_root: Path, layout_module):
+        """通过临时 FakeMemory-like 对象走 from_memory；拿不到返回 None。"""
+
+        class _PathOnlyMemory:
+            workspace_memory_dir = memory_root
+
+        layout = layout_module.from_memory(_PathOnlyMemory())
+        # 如果 from_memory 回到 fallback，说明没命中，这里返回 None 让 fallback 阶段接管
+        if layout is layout_module.DEFAULT_LAYOUTS["fallback"]:
+            return None
+        return layout
+
+    def _log_layout_source(self, source: str, detail: str) -> None:
+        logger.info("ProjectLayout source=%s detail=%s", source, detail)
+        if self._runtime_state is not None:
+            try:
+                self._runtime_state.append_event(
+                    "project_layout_resolved", source=source, detail=detail
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("append project_layout_resolved event failed: %s", exc)
 
     # ------------------------------------------------------------
     # Hook 触发封装（M2 + T2.11）
