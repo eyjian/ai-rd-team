@@ -109,6 +109,44 @@ def init(
 
 
 @app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", help="监听地址"),
+    port: int = typer.Option(8765, help="监听端口"),
+    workspace: Path | None = typer.Option(
+        None, "--workspace", "-w", help="工作区根目录（默认当前目录）"
+    ),
+    reload: bool = typer.Option(False, help="开发模式自动重载"),
+) -> None:
+    """启动 Web 面板服务（只读模式，不启动引擎）。
+
+    使用 ``ai-rd-team run`` 会自动启动 Web 面板；本命令用于独立查看历史数据。
+    """
+    import uvicorn
+
+    from ai_rd_team.service.app import create_app
+
+    ws = workspace or Path.cwd()
+    runtime_dir = ws / ".ai-rd-team" / "runtime"
+    if not runtime_dir.is_dir():
+        console.print(
+            "[yellow]警告[/yellow]：工作区 runtime 目录不存在，"
+            "Web 面板将显示为空。\n"
+            f"  期望路径：[dim]{runtime_dir}[/dim]"
+        )
+
+    app_instance = create_app(workspace=ws, engine=None)
+    url = f"http://{host}:{port}"
+    console.print(
+        Panel.fit(
+            f"ai-rd-team Web 面板\n\n访问：[bold]{url}[/bold]\n工作区：[dim]{ws}[/dim]",
+            title="serve",
+            border_style="blue",
+        )
+    )
+    uvicorn.run(app_instance, host=host, port=port, reload=reload, log_level="info")
+
+
+@app.command()
 def run(
     requirement: str = typer.Argument(..., help="需求描述"),
     mode: str | None = typer.Option(

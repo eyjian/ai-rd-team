@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ai-rd-team 面板</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.4/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      [v-cloak] {
+        display: none;
+      }
+      .tab-active {
+        border-bottom: 2px solid #2563eb;
+        color: #2563eb;
+        font-weight: 600;
+      }
+      pre {
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 text-gray-800">
+    <div id="app" v-cloak class="min-h-screen">
+      <!-- 顶栏 -->
+      <header class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="text-xl font-bold text-blue-600">ai-rd-team</div>
+            <span
+              class="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600"
+            >
+              v{{ version }}
+            </span>
+            <span
+              class="text-xs px-2 py-0.5 rounded"
+              :class="stateColor"
+            >
+              {{ engineState }}
+            </span>
+          </div>
+          <div class="text-sm text-gray-500">
+            <span v-if="currentRun.run_id">
+              run={{ currentRun.run_id }} · mode={{ currentRun.mode }}
+            </span>
+            <span v-else class="text-gray-400">未启动运行</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- 标签页 -->
+      <nav class="bg-white border-b">
+        <div class="max-w-7xl mx-auto px-4">
+          <ul class="flex gap-6 text-sm">
+            <li
+              v-for="t in tabs"
+              :key="t.id"
+              class="py-3 cursor-pointer"
+              :class="{ 'tab-active': currentTab === t.id }"
+              @click="currentTab = t.id"
+            >
+              {{ t.label }}
+            </li>
+          </ul>
+        </div>
+      </nav>
+
+      <main class="max-w-7xl mx-auto px-4 py-6">
+        <!-- 总览 -->
+        <section v-if="currentTab === 'overview'">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-white p-4 rounded shadow-sm">
+              <div class="text-xs text-gray-500">状态</div>
+              <div class="text-2xl font-semibold mt-1">{{ engineState }}</div>
+            </div>
+            <div class="bg-white p-4 rounded shadow-sm">
+              <div class="text-xs text-gray-500">成员数</div>
+              <div class="text-2xl font-semibold mt-1">{{ members.length }}</div>
+            </div>
+            <div class="bg-white p-4 rounded shadow-sm">
+              <div class="text-xs text-gray-500">Resource Points</div>
+              <div class="text-2xl font-semibold mt-1">
+                {{ costSnapshot.resource_points || 0 }}
+                <span class="text-sm text-gray-400"
+                  >/ {{ costSnapshot.rp_budget || 0 }}</span
+                >
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white p-4 rounded shadow-sm mb-4">
+            <h3 class="font-semibold mb-3">需求</h3>
+            <p class="text-sm text-gray-700">
+              {{ currentRun.requirement || '（无）' }}
+            </p>
+          </div>
+
+          <div class="bg-white p-4 rounded shadow-sm">
+            <h3 class="font-semibold mb-3">最近事件</h3>
+            <div class="space-y-1 max-h-96 overflow-y-auto">
+              <div
+                v-for="(e, i) in recentEvents"
+                :key="i"
+                class="text-xs font-mono border-l-2 border-blue-200 pl-2"
+              >
+                <span class="text-gray-400">{{ formatTime(e.ts) }}</span>
+                <span class="text-blue-600 mx-2">{{ e.event }}</span>
+                <span class="text-gray-600">{{ summarize(e) }}</span>
+              </div>
+              <div v-if="!recentEvents.length" class="text-sm text-gray-400">
+                （暂无事件）
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 团队 -->
+        <section v-if="currentTab === 'team'">
+          <div class="bg-white rounded shadow-sm overflow-hidden">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-100 text-left">
+                <tr>
+                  <th class="px-4 py-2">名称</th>
+                  <th class="px-4 py-2">角色</th>
+                  <th class="px-4 py-2">状态</th>
+                  <th class="px-4 py-2">当前任务</th>
+                  <th class="px-4 py-2">产出</th>
+                  <th class="px-4 py-2">更新时间</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="m in members" :key="m.name" class="border-t">
+                  <td class="px-4 py-2 font-medium">{{ m.name }}</td>
+                  <td class="px-4 py-2">{{ m.role }}</td>
+                  <td class="px-4 py-2">
+                    <span
+                      class="px-2 py-0.5 rounded text-xs"
+                      :class="memberStatusClass(m.status)"
+                    >
+                      {{ m.status }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-2 text-gray-600">
+                    {{ m.current_task || '-' }}
+                  </td>
+                  <td class="px-4 py-2">
+                    {{ (m.produced_files || []).length }}
+                  </td>
+                  <td class="px-4 py-2 text-xs text-gray-500">
+                    {{ formatTime(m.last_updated) }}
+                  </td>
+                </tr>
+                <tr v-if="!members.length">
+                  <td
+                    colspan="6"
+                    class="px-4 py-8 text-center text-gray-400 text-sm"
+                  >
+                    （无成员）
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 消息 -->
+        <section v-if="currentTab === 'messages'">
+          <div class="bg-white rounded shadow-sm p-4 space-y-2">
+            <div
+              v-for="(m, i) in messages"
+              :key="i"
+              class="border-l-2 border-gray-300 pl-3 py-2"
+            >
+              <div class="text-xs text-gray-500">
+                <span class="font-mono">{{ formatTime(m.ts) }}</span> ·
+                <span class="text-blue-600">{{ m.from }}</span> →
+                <span class="text-green-600">{{ m.to }}</span> ·
+                <span>{{ m.type }}</span>
+                <span v-if="m.summary" class="ml-2 text-gray-400"
+                  >（{{ m.summary }}）</span
+                >
+              </div>
+              <pre class="text-sm mt-1 text-gray-700">{{ m.content }}</pre>
+            </div>
+            <div v-if="!messages.length" class="text-sm text-gray-400 py-4">
+              （无消息）
+            </div>
+          </div>
+        </section>
+
+        <!-- 制品 -->
+        <section v-if="currentTab === 'artifacts'">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-white rounded shadow-sm p-4 md:col-span-1">
+              <h3 class="font-semibold mb-2">文件列表（{{ artifacts.length }}）</h3>
+              <ul class="space-y-1 text-sm">
+                <li
+                  v-for="a in artifacts"
+                  :key="a.path"
+                  class="cursor-pointer hover:text-blue-600"
+                  :class="{ 'text-blue-600 font-medium': selectedArtifact === a.path }"
+                  @click="loadArtifact(a.path)"
+                >
+                  <span class="text-xs text-gray-400">{{ a.category }}</span>
+                  · {{ a.path }}
+                </li>
+                <li v-if="!artifacts.length" class="text-gray-400">（无）</li>
+              </ul>
+            </div>
+            <div class="bg-white rounded shadow-sm p-4 md:col-span-2">
+              <h3 class="font-semibold mb-2">内容预览</h3>
+              <pre
+                v-if="artifactContent"
+                class="text-xs font-mono bg-gray-50 p-3 rounded overflow-auto max-h-[600px]"
+                >{{ artifactContent }}</pre
+              >
+              <div v-else class="text-sm text-gray-400">
+                （选择左侧文件查看）
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 记忆 -->
+        <section v-if="currentTab === 'memory'">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="bg-white rounded shadow-sm p-4">
+              <h3 class="font-semibold mb-2">agent.d</h3>
+              <ul class="space-y-1 text-sm">
+                <li
+                  v-for="f in memoryAgentD.files"
+                  :key="f.path"
+                  class="cursor-pointer hover:text-blue-600"
+                  @click="loadMemory('agent.d/' + f.path)"
+                >
+                  {{ f.name }}
+                </li>
+                <li v-if="!memoryAgentD.files?.length" class="text-gray-400">
+                  （无）
+                </li>
+              </ul>
+            </div>
+            <div class="bg-white rounded shadow-sm p-4">
+              <h3 class="font-semibold mb-2">decisions (ADR)</h3>
+              <ul class="space-y-1 text-sm">
+                <li
+                  v-for="f in memoryDecisions.files"
+                  :key="f.path"
+                  class="cursor-pointer hover:text-blue-600"
+                  @click="loadMemory('decisions/' + f.path)"
+                >
+                  {{ f.name }}
+                </li>
+                <li v-if="!memoryDecisions.files?.length" class="text-gray-400">
+                  （无）
+                </li>
+              </ul>
+            </div>
+            <div class="bg-white rounded shadow-sm p-4">
+              <h3 class="font-semibold mb-2">memory.d</h3>
+              <ul class="space-y-1 text-sm">
+                <li
+                  v-for="f in memoryD.files"
+                  :key="f.path"
+                  class="cursor-pointer hover:text-blue-600"
+                  @click="loadMemory('memory.d/' + f.path)"
+                >
+                  {{ f.name }}
+                </li>
+                <li v-if="!memoryD.files?.length" class="text-gray-400">
+                  （无）
+                </li>
+              </ul>
+            </div>
+          </div>
+          <div v-if="memoryContent" class="bg-white rounded shadow-sm p-4 mt-4">
+            <pre class="text-xs font-mono bg-gray-50 p-3 rounded overflow-auto max-h-[500px]">{{ memoryContent }}</pre>
+          </div>
+        </section>
+
+        <!-- 成本 -->
+        <section v-if="currentTab === 'cost'">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-white p-4 rounded shadow-sm">
+              <h3 class="font-semibold mb-3">当前快照</h3>
+              <dl class="space-y-1 text-sm">
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">Resource Points</dt>
+                  <dd class="font-mono">
+                    {{ costSnapshot.resource_points || 0 }} /
+                    {{ costSnapshot.rp_budget || 0 }}
+                    ({{ Math.round((costSnapshot.rp_usage_ratio || 0) * 100) }}%)
+                  </dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">成员数</dt>
+                  <dd class="font-mono">
+                    {{ costSnapshot.member_spawn_count || 0 }}
+                  </dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">消息数</dt>
+                  <dd class="font-mono">
+                    {{ costSnapshot.message_count || 0 }}
+                  </dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">广播数</dt>
+                  <dd class="font-mono">
+                    {{ costSnapshot.broadcast_count || 0 }}
+                  </dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">运行时长 (分钟)</dt>
+                  <dd class="font-mono">
+                    {{ (costSnapshot.runtime_minutes || 0).toFixed(1) }}
+                  </dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">迭代次数</dt>
+                  <dd class="font-mono">
+                    {{ costSnapshot.iteration_count || 0 }}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <div class="bg-white p-4 rounded shadow-sm">
+              <h3 class="font-semibold mb-3">窗口额度</h3>
+              <dl class="space-y-1 text-sm">
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">日已用 / 剩余</dt>
+                  <dd class="font-mono">
+                    {{ costSnapshot.day_used || 0 }} /
+                    {{ costSnapshot.day_remaining || 0 }}
+                  </dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">周已用 / 剩余</dt>
+                  <dd class="font-mono">
+                    {{ costSnapshot.week_used || 0 }} /
+                    {{ costSnapshot.week_remaining || 0 }}
+                  </dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500">月已用 / 剩余</dt>
+                  <dd class="font-mono">
+                    {{ costSnapshot.month_used || 0 }} /
+                    {{ costSnapshot.month_remaining || 0 }}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+
+          <div class="bg-white rounded shadow-sm p-4 mt-4">
+            <h3 class="font-semibold mb-3">历史运行</h3>
+            <table class="w-full text-sm">
+              <thead class="text-left bg-gray-100">
+                <tr>
+                  <th class="px-3 py-2">run_id</th>
+                  <th class="px-3 py-2">档位</th>
+                  <th class="px-3 py-2">RP</th>
+                  <th class="px-3 py-2">成员</th>
+                  <th class="px-3 py-2">消息</th>
+                  <th class="px-3 py-2">时长</th>
+                  <th class="px-3 py-2">结束时间</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in costHistory" :key="r.run_id" class="border-t">
+                  <td class="px-3 py-2 font-mono">{{ r.run_id }}</td>
+                  <td class="px-3 py-2">{{ r.mode }}</td>
+                  <td class="px-3 py-2 font-mono">{{ r.rp_used }}</td>
+                  <td class="px-3 py-2">{{ r.members_spawned }}</td>
+                  <td class="px-3 py-2">{{ r.messages }}</td>
+                  <td class="px-3 py-2">{{ r.minutes?.toFixed(1) }}</td>
+                  <td class="px-3 py-2 text-xs text-gray-500">
+                    {{ formatTime(r.ended_at) }}
+                  </td>
+                </tr>
+                <tr v-if="!costHistory.length">
+                  <td colspan="7" class="px-3 py-6 text-center text-gray-400">
+                    （无历史运行）
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- 配置 -->
+        <section v-if="currentTab === 'config'">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-white p-4 rounded shadow-sm">
+              <h3 class="font-semibold mb-2">Basic 配置（config.yaml）</h3>
+              <pre class="text-xs font-mono bg-gray-50 p-3 rounded overflow-auto max-h-[500px]">{{ formatYaml(basicConfig) }}</pre>
+            </div>
+            <div class="bg-white p-4 rounded shadow-sm">
+              <h3 class="font-semibold mb-2">Advanced 配置（config.advanced.yaml）</h3>
+              <pre class="text-xs font-mono bg-gray-50 p-3 rounded overflow-auto max-h-[500px]">{{ formatYaml(advancedConfig) }}</pre>
+            </div>
+          </div>
+
+          <div class="bg-white p-4 rounded shadow-sm mt-4">
+            <h3 class="font-semibold mb-2">EffectiveConfig 摘要</h3>
+            <dl
+              v-if="effectiveConfig.config_version"
+              class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm"
+            >
+              <div>
+                <dt class="text-gray-500 text-xs">config_version</dt>
+                <dd class="font-mono">{{ effectiveConfig.config_version }}</dd>
+              </div>
+              <div>
+                <dt class="text-gray-500 text-xs">active_mode</dt>
+                <dd class="font-mono">{{ effectiveConfig.active_mode }}</dd>
+              </div>
+              <div>
+                <dt class="text-gray-500 text-xs">项目</dt>
+                <dd>{{ effectiveConfig.project?.description || '-' }}</dd>
+              </div>
+              <div>
+                <dt class="text-gray-500 text-xs">预算 (RP)</dt>
+                <dd class="font-mono">
+                  {{ effectiveConfig.active_budget?.max_resource_points || 0 }}
+                </dd>
+              </div>
+            </dl>
+            <div v-else class="text-sm text-gray-400">
+              （Engine 未初始化，无法获取 EffectiveConfig）
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="text-center text-xs text-gray-400 py-6">
+        ai-rd-team Web 面板 · M3 MVP · 数据每 3 秒刷新 · SSE 实时事件
+      </footer>
+    </div>
+
+    <script>
+      const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+
+      createApp({
+        setup() {
+          const tabs = [
+            { id: 'overview', label: '总览' },
+            { id: 'team', label: '团队' },
+            { id: 'messages', label: '消息' },
+            { id: 'artifacts', label: '制品' },
+            { id: 'memory', label: '记忆' },
+            { id: 'cost', label: '成本' },
+            { id: 'config', label: '配置' },
+          ];
+
+          const currentTab = ref('overview');
+          const version = ref('0.1.0');
+          const engineState = ref('unavailable');
+          const currentRun = ref({});
+          const members = ref([]);
+          const messages = ref([]);
+          const recentEvents = ref([]);
+          const artifacts = ref([]);
+          const selectedArtifact = ref('');
+          const artifactContent = ref('');
+          const memoryAgentD = ref({ files: [] });
+          const memoryDecisions = ref({ files: [] });
+          const memoryD = ref({ files: [] });
+          const memoryContent = ref('');
+          const costSnapshot = ref({});
+          const costHistory = ref([]);
+          const basicConfig = ref({});
+          const advancedConfig = ref({});
+          const effectiveConfig = ref({});
+
+          const stateColor = computed(() => {
+            const s = engineState.value;
+            if (s === 'running') return 'bg-green-100 text-green-700';
+            if (s === 'stopped') return 'bg-gray-200 text-gray-700';
+            if (s === 'error') return 'bg-red-100 text-red-700';
+            return 'bg-yellow-100 text-yellow-700';
+          });
+
+          async function api(path) {
+            try {
+              const r = await fetch(path);
+              if (!r.ok) return null;
+              return await r.json();
+            } catch {
+              return null;
+            }
+          }
+
+          async function refresh() {
+            const [v, run, mems, msgs, evts, arts, cs, ch, bc, ac, ec] =
+              await Promise.all([
+                api('/api/version'),
+                api('/api/run/current'),
+                api('/api/team/members'),
+                api('/api/team/messages?limit=100'),
+                api('/api/events?limit=50'),
+                api('/api/artifacts'),
+                api('/api/cost/snapshot'),
+                api('/api/cost/history?limit=50'),
+                api('/api/config/basic'),
+                api('/api/config/advanced'),
+                api('/api/config/effective'),
+              ]);
+
+            if (v) version.value = v.version;
+            if (run) {
+              engineState.value = run.engine_state || 'idle';
+              currentRun.value = run.engine_run || {
+                run_id: run.run_id,
+                mode: run.mode,
+                requirement: run.requirement,
+              };
+            }
+            if (mems) members.value = mems.members || [];
+            if (msgs) messages.value = (msgs.messages || []).reverse();
+            if (evts) recentEvents.value = (evts.events || []).reverse();
+            if (arts) artifacts.value = arts.artifacts || [];
+            if (cs) costSnapshot.value = cs;
+            if (ch) costHistory.value = ch.runs || [];
+            if (bc) basicConfig.value = bc;
+            if (ac) advancedConfig.value = ac;
+            if (ec) effectiveConfig.value = ec;
+          }
+
+          async function loadMemoryLists() {
+            const [a, d, m] = await Promise.all([
+              api('/api/memory/agent-d'),
+              api('/api/memory/decisions'),
+              api('/api/memory/memory-d'),
+            ]);
+            if (a) memoryAgentD.value = a;
+            if (d) memoryDecisions.value = d;
+            if (m) memoryD.value = m;
+          }
+
+          async function loadArtifact(path) {
+            selectedArtifact.value = path;
+            const r = await api(
+              '/api/artifacts/file?path=' + encodeURIComponent(path),
+            );
+            artifactContent.value =
+              r?.content ?? '（二进制文件，无法展示）';
+          }
+
+          async function loadMemory(path) {
+            const r = await api(
+              '/api/memory/file?path=' + encodeURIComponent(path),
+            );
+            memoryContent.value = r?.content ?? '（加载失败）';
+          }
+
+          function memberStatusClass(s) {
+            if (s === 'done') return 'bg-green-100 text-green-700';
+            if (s === 'failed') return 'bg-red-100 text-red-700';
+            if (s === 'working') return 'bg-blue-100 text-blue-700';
+            if (s === 'terminated') return 'bg-gray-200 text-gray-600';
+            return 'bg-yellow-100 text-yellow-700';
+          }
+
+          function formatTime(ts) {
+            if (!ts) return '-';
+            try {
+              return new Date(ts).toLocaleString('zh-CN');
+            } catch {
+              return ts;
+            }
+          }
+
+          function summarize(e) {
+            const keys = ['member_id', 'role', 'reason', 'mode', 'team_id'];
+            return keys
+              .filter((k) => e[k] !== undefined)
+              .map((k) => `${k}=${e[k]}`)
+              .join(' ');
+          }
+
+          function formatYaml(obj) {
+            if (!obj || Object.keys(obj).length === 0) return '（空）';
+            return JSON.stringify(obj, null, 2);
+          }
+
+          let timer = null;
+          let sse = null;
+
+          onMounted(async () => {
+            await refresh();
+            await loadMemoryLists();
+            timer = setInterval(refresh, 3000);
+            try {
+              sse = new EventSource('/api/stream/events');
+              sse.onmessage = (ev) => {
+                try {
+                  const data = JSON.parse(ev.data);
+                  recentEvents.value = [data, ...recentEvents.value].slice(
+                    0,
+                    50,
+                  );
+                } catch {
+                  /* ignore */
+                }
+              };
+            } catch {
+              /* SSE 不支持时回退到轮询 */
+            }
+          });
+
+          onUnmounted(() => {
+            if (timer) clearInterval(timer);
+            if (sse) sse.close();
+          });
+
+          return {
+            tabs,
+            currentTab,
+            version,
+            engineState,
+            stateColor,
+            currentRun,
+            members,
+            messages,
+            recentEvents,
+            artifacts,
+            selectedArtifact,
+            artifactContent,
+            memoryAgentD,
+            memoryDecisions,
+            memoryD,
+            memoryContent,
+            costSnapshot,
+            costHistory,
+            basicConfig,
+            advancedConfig,
+            effectiveConfig,
+            loadArtifact,
+            loadMemory,
+            memberStatusClass,
+            formatTime,
+            summarize,
+            formatYaml,
+          };
+        },
+      }).mount('#app');
+    </script>
+  </body>
+</html>
