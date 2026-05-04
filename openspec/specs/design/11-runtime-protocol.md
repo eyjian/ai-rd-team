@@ -318,6 +318,7 @@ members:
 | `quota_{day/week/month}_blocked` | CostTracker | window |
 | `phase_complete` | PM 或 Hook | phase |
 | `hook_triggered` | HookRunner | hook_name |
+| `bridge_auto_responded` | AutoBridgeResponder（M5） | intent_id, op, decision, type? |
 | `error` | 任何 | error, context |
 
 ### 8.4 保留策略

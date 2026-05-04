@@ -57,19 +57,19 @@
 
 ## 5. 配置 / 文档 / Changelog
 
-- [ ] 5.1 在 `openspec/specs/design/10-config-schema.md` 的 adapter 配置节追加 `auto_bridge` / `version_override` / `available_tools_override` 三个字段说明
+- [x] 5.1 在 `openspec/specs/design/10-config-schema.md` 的 adapter 配置节追加 `auto_bridge` / `version_override` / `available_tools_override` 三个字段说明
   - **验收**：文档新增表格行或 YAML 示例。
-- [ ] 5.2 更新 `openspec/specs/design/11-runtime-protocol.md` §8.3 事件清单，加 `bridge_auto_responded` 条目
+- [x] 5.2 更新 `openspec/specs/design/11-runtime-protocol.md` §8.3 事件清单，加 `bridge_auto_responded` 条目
   - **验收**：事件清单含新事件，字段说明齐全。
-- [ ] 5.3 更新 `openspec/specs/design/ROADMAP.md`，新增 "M5" 节与本次 change 对应任务
+- [x] 5.3 更新 `openspec/specs/design/ROADMAP.md`，新增 "M5" 节与本次 change 对应任务
   - **验收**：ROADMAP 含 M5 标题、目标、本 change 链接。
-- [ ] 5.4 更新 `CHANGELOG.md` 的 `[Unreleased]` 节：
+- [x] 5.4 更新 `CHANGELOG.md` 的 `[Unreleased]` 节：
   - Added: AutoBridgeResponder；`adapter.auto_bridge` 开关；`/api/bridge/pending-intents` 端点；Web 总览页卡片
   - Changed: `CodeBuddyAdapter.initialize()` 不再走 file bridge
   - Migration: 旧配置无需改动；遇兼容问题设 `adapter.auto_bridge: false`
   - **验收**：CHANGELOG 含 4 类变更，文案符合 Keep a Changelog 风格。
-- [ ] 5.5 在 `docs/` 下新增或更新一篇 `06-bridge-and-auto-responder.md`，一页说明"M5 后主 Agent 需要应答哪几类 intent"
-  - **验收**：文档含"手动应答清单 = {team_create, task, send_message type=message, team_delete}" + 配置回退说明。
+- [x] 5.5 在 `docs/` 下新增或更新一篇 `06-bridge-and-auto-responder.md`，一页说明"M5 后主 Agent 需要应答哪几类 intent"
+  - **验收**：文档含"手动应答清单 = {team_create, task, send_message type=message, team_delete}" + 配置回退说明。docs/README.md 目录同步更新。
 
 ## 6. 真实 E2E 验证
 

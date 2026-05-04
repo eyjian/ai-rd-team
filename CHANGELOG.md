@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (M5 - reduce-bridge-burden)
+
+- **AutoBridgeResponder**（`src/ai_rd_team/adapter/auto_responder.py`）：file-bridge 协议之上的后台自动应答组件，自动处理 `_version` / `_probe` / `shutdown_request` / `shutdown_response` / `broadcast` 五类 intent，降低 E2E 场景下主 Agent 手动介入次数。真工具类 intent（team_create / task / send_message type=message / team_delete）保持由主 Agent 处理。
+- 配置开关 `adapter.auto_bridge`（默认 true）：关闭后完全回退到 M4 行为。
+- 配置覆盖 `adapter.version_override` / `adapter.available_tools_override`：替代 bridge 探测的本地默认常量。
+- REST 端点 `GET /api/bridge/pending-intents`：返回未被 auto-responder 处理的 intent 列表，含每条 `op` / `hint` / `age_seconds`。
+- Web 总览页新增 **Pending bridge intents** 卡片：空态显示"✅ 无需干预"，非空 amber 高亮列出每条 intent 的工具调用提示。
+- `events.jsonl` 新增事件类型 `bridge_auto_responded`。
+- OpenSpec change：`openspec/changes/reduce-bridge-burden/`（proposal + design + specs + tasks），含 GLM-5.1 跨模型基线对比任务。
+
+### Changed (M5)
+
+- **BREAKING（内部行为）**：`CodeBuddyAdapter.initialize()` 不再通过 bridge 发 `_version` / `_probe` intent，改用本地常量 `DEFAULT_CODEBUDDY_VERSION` / `DEFAULT_AVAILABLE_TOOLS`。同步修改 2 个集成测试断言（`_probe` / `_version` ops 不再出现在 `BridgeSimulator.processed` 中）。
+- 旧用户配置无需修改：缺省等价于启用 auto_bridge + 用默认 version/tool 常量。
+- `openspec/specs/design/02-adapter.md` §5.2.1、`04-web-panel.md` §4.1、`10-config-schema.md` adapter 节、`11-runtime-protocol.md` §8.3 同步更新。
+
+### Migration
+
+- 从 0.1.0a1 升级：无需任何配置变更。
+- 若遇 auto-responder 兼容问题，在 `config.advanced.yaml` 写 `adapter: {auto_bridge: false}` 回退。
+- 若 CodeBuddy 升级到不同版本字符串，在 `config.advanced.yaml` 写 `adapter: {version_override: "claude-opus-4.8"}` 覆盖。
+
 ### Planned
 
 - TestPyPI 上传验证（本地构建 + twine check 已通过，上传需要账号 token，流程见 `RELEASING.md`）

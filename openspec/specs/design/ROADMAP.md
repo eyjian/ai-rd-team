@@ -211,6 +211,39 @@
 
 ---
 
+## 6A. M5：降低 bridge 负担（~2 天）
+
+**目标**：降低 file-based bridge 在 E2E 场景下对主 Agent "在线手动应答"的依赖，把一次 Standard 档 blog-api E2E 的主 Agent 手动应答次数从 **~11** 降到 **~6**。
+
+**关联 openspec change**：`openspec/changes/reduce-bridge-burden/`（proposal + design + specs + tasks）
+**关联 capability**：`openspec/specs/adapter-bridge-auto-responder/spec.md`（归档后落地）
+
+### 6A.1 范围
+
+✅ **包含**：
+- F 优化：`CodeBuddyAdapter.initialize()` 的 `_version` / `_probe` 本地化，不再发 bridge intent
+- D Daemon：`AutoBridgeResponder` 后台线程，自动应答 `_version` / `_probe` / `shutdown_request` / `shutdown_response` / `broadcast`
+- 配置开关：`adapter.auto_bridge` 默认 true，可关闭回退到 M4 行为
+- Web 面板：Pending bridge intents 卡片，清楚展示"需主 Agent 介入"的 intent
+- 观测：`events.jsonl` 新增 `bridge_auto_responded` 事件
+- 真实 E2E 验证：Claude-Opus-4.7 + GLM-5.1 两次 baseline 对比
+
+❌ **不包含**：
+- 自动调 CodeBuddy 真工具（team_create / task / send_message type=message / team_delete 仍由主 Agent 处理）
+- 引入 CodeBuddy CLI / REST / IDE 扩展路径
+- Trae / Qoder 适配器
+- RP → USD 校准
+
+### 6A.2 验收标准
+
+- ✅ `pytest -q` 全绿（≥ 425 用例）
+- ✅ blog-api Standard 档 E2E 手动应答 ≤ 6 次
+- ✅ 产物 `go build ./...` 通过
+- ✅ 同一代码在 GLM-5.1 上也能跑通 E2E（作为"模型无关性"证据）
+- ✅ CHANGELOG 记录，openspec archive 归档
+
+---
+
 ## 7. 关键风险与应对
 
 | 风险 | 可能性 | 影响 | 应对 |

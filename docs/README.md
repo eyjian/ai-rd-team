@@ -9,8 +9,9 @@
 3. [角色与团队](03-roles-and-team.md) — 7 角色、档位、可伸缩、升档
 4. [Skills 指南](04-skills.md) — 内置 Skills、自定义 Skills、如何影响成员行为
 5. [成本控制](05-cost-control.md) — RP 计量、预算、smart_pause、模型降级
+6. [Bridge 与 Auto-Responder](06-bridge-and-auto-responder.md)（M5+）— E2E 主 Agent 只需应答 4 类 intent
 
-其他主题（记忆、Hook、Web 面板、CLI）暂参考：
+其他主题（记忆、Hook、CLI）暂参考：
 
 - **记忆系统** → `openspec/specs/design/06-memory-system.md`
 - **Hook 与安全** → `openspec/specs/design/09-hooks-security.md`

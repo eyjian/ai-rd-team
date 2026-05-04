@@ -460,6 +460,14 @@ adapter:
   type: "codebuddy"                   # codebuddy / trae / qoder
   version: "auto"                     # auto 或指定版本
   options: {}                         # Adapter 特定选项
+  # ---- 以下为 CodeBuddy 文件 bridge 专用字段 ----
+  bridge_timeout_seconds: 60          # intent→result 等待超时（FileBasedBridge）
+  # M5 新增字段（reduce-bridge-burden change）：
+  auto_bridge: true                   # 启用后台 AutoBridgeResponder 自动应答
+                                      # _version / _probe / shutdown_request /
+                                      # shutdown_response / broadcast。false 回到 M4 行为
+  version_override: null              # 字符串，覆盖 DEFAULT_CODEBUDDY_VERSION，null 用默认
+  available_tools_override: null      # 字符串列表，覆盖 DEFAULT_AVAILABLE_TOOLS，null 用默认
 
 # 环境约束
 environment:
