@@ -1,30 +1,37 @@
-# SmartBookmark 预期产出
+# SmartBookmark 预期产出（M7 新布局）
 
 ## 成员产出文件
 
+交付物直接在**项目根**，过程数据在 `.ai-rd-team/runtime/`：
+
 ```
-.ai-rd-team/runtime/artifacts/
-├── code/
-│   ├── pyproject.toml                  # 可 pip install -e .
-│   ├── smart_bookmark/
-│   │   ├── __init__.py
-│   │   ├── __main__.py                 # CLI 入口
-│   │   ├── models.py                   # Bookmark dataclass
-│   │   └── store.py                    # JSON 存储
-│   └── tests/
-│       ├── __init__.py
-│       ├── test_store.py               # store.py 的测试
-│       └── test_cli.py                 # argparse 测试
-└── reports/
-    └── report-developer.md
+<workspace>/                                # 项目根
+├── pyproject.toml                          # 可 pip install -e .
+├── smart_bookmark/
+│   ├── __init__.py
+│   ├── __main__.py                         # CLI 入口
+│   ├── models.py                           # Bookmark dataclass
+│   └── store.py                            # JSON 存储
+├── tests/
+│   ├── __init__.py
+│   ├── test_store.py
+│   └── test_cli.py
+└── .ai-rd-team/
+    └── runtime/
+        ├── manifest.yaml                   # 权威索引（含所有 delivery + process）
+        ├── reports/
+        │   └── report-developer.md         # 开发者总结（过程）
+        └── state/members/developer.yaml
 ```
+
+（注：Python 默认 `ProjectLayout` 的 `code_dirs={"main": "src"}`，但只有一个主模块 `smart_bookmark/` 时，实际更常见的是直接落项目根。架构师会按项目特点调整；最新行为以 `manifest.yaml` 里的 `path` 为准。）
 
 ## 验收步骤
 
 ```bash
-cd .ai-rd-team/runtime/artifacts/code
+cd <workspace>
 
-# 1. 装
+# 1. 装（代码已经就在项目根）
 pip install -e .
 
 # 2. 测
@@ -50,14 +57,14 @@ role: developer
 status: done         # ← 关键
 current_task: "SmartBookmark 完成"
 progress: "100%"
-produced_files:
-  - artifacts/code/pyproject.toml
-  - artifacts/code/smart_bookmark/__main__.py
-  - artifacts/code/smart_bookmark/store.py
-  - artifacts/code/smart_bookmark/models.py
-  - artifacts/code/tests/test_store.py
-  - artifacts/code/tests/test_cli.py
-  - artifacts/reports/report-developer.md
+produced_files:          # 相对项目根
+  - pyproject.toml
+  - smart_bookmark/__main__.py
+  - smart_bookmark/store.py
+  - smart_bookmark/models.py
+  - tests/test_store.py
+  - tests/test_cli.py
+  - .ai-rd-team/runtime/reports/report-developer.md
 blocking_issues: []
 ```
 

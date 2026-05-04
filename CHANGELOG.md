@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ⚠️ BREAKING (M7 — relocate-artifacts-to-root)
+
+**交付物落位从 `.ai-rd-team/runtime/artifacts/` 迁移到项目根**。团队产出的代码 / 文档 / 测试 / 部署脚本将直接落项目根，不再埋在隐藏目录下。过程数据（评审 / 阶段报告 / manifest / 状态 / 日志）仍保留 `.ai-rd-team/runtime/`。
+
+**迁移指南**（老 0.1.x workspace）：
+```bash
+# 1. 删除老的 runtime/artifacts/ 目录（确认不需要保留历史产物）
+rm -rf <workspace>/.ai-rd-team/runtime/artifacts/
+# 2. 重新运行团队，按新布局产出
+ai-rd-team run "..."
+```
+本次不提供 `ai-rd-team migrate` CLI，beta 期外部用户极少，手动清理成本低；如将来真出现迁移需求会通过 follow-up change 补。
+
+### Added (M7)
+
+- **`ProjectLayout`**（`src/ai_rd_team/artifacts/layout.py`）：描述交付物落位规则的 frozen dataclass，包含 `code_dirs` / `docs_root` / `docs_subdirs` / `tests_root` / `tests_mode` / `deploy_root` / `root_level_files` 字段。
+- `DEFAULT_LAYOUTS` 6 档内置布局：`python` / `go` / `js` / `vue3` / `wechat-mp` / `fallback`。
+- `ProjectLayout.from_yaml(path)`：从架构师运行时声明的 `data-project-layout.yaml` 加载（支持 `base: <preset>` + `overrides: {...}` 合并）。
+- `ProjectLayout.from_memory(mm)`：从 memory 的 `tech-stack-selected.md` 关键词推断（Go / Python / Vue / 微信小程序 等）。
+- `ArtifactRecorder` 五个新分派方法：`write_code(module, filename)` / `write_doc(category, filename)` / `write_test(module, filename)` / `write_deploy(filename)` / `write_process(kind, name)`，自动按 layout 决定路径。
+- `manifest.yaml` 新增 `category` 字段（`delivery` / `process`），每条 entry 可识别两种语义基。
+- `TeamEnvironmentManager.initialize()` 按优先级加载 layout：架构师 yaml > `config.artifacts.layout` > memory 推断 > fallback；解析结果写入 `events.jsonl` 的 `project_layout_resolved` 事件便于调试。
+- `GET /api/artifacts` 端点从扫 `runtime/artifacts/` 改为读权威 `manifest.yaml`，返回含 `exists` / `size` 字段。
+- `GET /api/artifacts/file` 端点新增 `category` query 参数（默认 `delivery` 相对项目根；`process` 相对 runtime_dir）。
+- 新增 `docs/07-artifact-placement.md` 用户手册。
+- 新增 `openspec/specs/artifact-placement/spec.md` 正式 spec（5 个 requirement）。
+
+### Changed (M7)
+
+- `ArtifactRecorder.__init__` 签名从 `(artifacts_dir)` 改为 `(project_root, runtime_dir, layout)`（破坏性）。
+- `manifest.yaml` 位置从 `<runtime>/artifacts/manifest.yaml` 提升到 `<runtime>/manifest.yaml`。
+- `manifest` path 语义：`delivery` 条目为项目根相对、`process` 条目为 runtime_dir 相对（含 kind 前缀）。
+- `_RUNTIME_SUBDIRS` 删除 `artifacts/**` 系列，新增 `review/` 和 `reports/` 作为过程数据顶层目录。
+- 成员 prompt 模板（`src/ai_rd_team/roles/prompt.py`）的"工作目录"段落全面重写，按角色指导不同落位。
+- 各角色"期望产出"（`_DEFAULT_ARTIFACTS`）路径更新为新布局。
+- `openspec/specs/design/07-artifacts.md` §4（目录结构 / 落位策略 / 角色映射 / 速查表）整体重写为 M7 语义。
+- `openspec/specs/design/11-runtime-protocol.md` 目录树去掉 `artifacts/`，加入 `review/` `reports/` `manifest.yaml`。
+- `openspec/specs/design/05-roles-skills.md` 角色速查表、工作目录样板更新。
+- 4 个 examples 的 `EXPECTED_OUTPUTS.md` + `README.md` 文件树全部对齐新布局。
+- `docs/01-getting-started.md § 第 7 步`、`docs/02-configuration.md`（新增 `artifacts.layout` 段 + `security.file_access.writable` 更新）同步。
+- CodeBuddy Skill（`plugins/ai-rd-team/skills/ai-rd-team-launcher/SKILL.md`）路径引导更新。
+- 版本号 `0.1.0b1` → **`0.2.0a1`**；Classifier `Development Status :: 4 - Beta` → `3 - Alpha`（标记新地基需要真实 E2E 打磨）。
+
+### Removed (M7)
+
+- `ArtifactRecorder.write()` / `write_raw()` 老接口（无 DeprecationWarning 过渡）。
+- `ARTIFACT_KINDS` 常量（五类前缀 `spec/data/result/log/report`）。
+- 老的 `ArtifactRecorder(artifacts_dir=...)` 构造签名。
+- `ROLE_TO_DIR` 作为"落位决策依据"的语义（保留为字符串映射仅作 prompt hint 用途；新增 `ROLE_TO_WRITE_METHOD` 取代其"决定写入方法"的职责）。
+- `config.advanced.yaml:artifacts.code_output.strategy` 三档（`in_place` / `artifacts_only` / `both`）的语义——M7 后 `in_place` 成为唯一策略且扩展到所有交付物类型。
+
+---
+
 ### Fixed (M6 — CodeBuddy marketplace 规范化)
 
 - **关键修复**：CodeBuddy Skill 目录结构从 M1 起就不符合 CodeBuddy marketplace 规范，导致主 Agent 无法自动识别 `ai-rd-team-launcher` 和 `ai-rd-team-bridge` 两个 Skill，之前的 E2E 全靠人工念"按 bridge.md 协议处理"激活。

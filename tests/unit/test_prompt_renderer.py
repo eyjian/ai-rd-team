@@ -93,11 +93,11 @@ class TestRender:
         assert "developer_1（developer）" in rendered.content
 
     def test_render_role_dir_mapping(self) -> None:
-        """渲染应使用 ROLE_TO_DIR 映射。"""
+        """M7：prompt 应体现新语义——developer 进项目根，architect 进 docs/design。"""
         renderer = PromptRenderer()
         cfg = _make_config()
 
-        # developer → code
+        # developer → 项目根 <模块目录>/
         role = builtin_roles()["developer"]
         rendered = renderer.render(
             role=role,
@@ -105,9 +105,10 @@ class TestRender:
             config=cfg,
             team_roster=[("developer_1", "developer")],
         )
-        assert "/artifacts/code/" in rendered.content
+        assert "项目根" in rendered.content
+        assert "developer" in rendered.content
 
-        # architect → design
+        # architect → docs/design/
         role_arch = builtin_roles()["architect"]
         rendered_arch = renderer.render(
             role=role_arch,
@@ -115,7 +116,7 @@ class TestRender:
             config=cfg,
             team_roster=[("architect", "architect")],
         )
-        assert "/artifacts/design/" in rendered_arch.content
+        assert "docs/design/" in rendered_arch.content
 
     def test_responsibilities_included(self) -> None:
         renderer = PromptRenderer()

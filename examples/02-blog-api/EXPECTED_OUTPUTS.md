@@ -1,43 +1,54 @@
-# BlogAPI 预期产出
+# BlogAPI 预期产出（M7 新布局）
 
 ## 成员产出文件
 
+Go + Kratos 项目；架构师声明 `data-project-layout.yaml` 用 `base=go` + `alongside` 测试；交付物直接落项目根：
+
 ```
-.ai-rd-team/runtime/artifacts/
-├── code/
-│   ├── go.mod
-│   ├── Makefile
-│   ├── api/blog/v1/
-│   │   ├── user.proto
-│   │   ├── post.proto
-│   │   ├── comment.proto
-│   │   └── (生成的 *.pb.go *_grpc.pb.go *_http.pb.go)
-│   ├── cmd/blog/
-│   │   ├── main.go
-│   │   └── wire.go / wire_gen.go
-│   ├── configs/config.yaml
-│   ├── internal/
-│   │   ├── biz/{user.go, post.go, comment.go, biz.go}
-│   │   ├── data/{user.go, post.go, comment.go, data.go}
-│   │   ├── service/{user.go, post.go, comment.go, service.go}
-│   │   ├── server/{grpc.go, http.go, server.go}
-│   │   └── conf/{conf.proto, conf.pb.go}
-│   └── tests/
-│       ├── integration/api_test.go
-│       └── biz/
+<workspace>/                              # 项目根
+├── go.mod
+├── Makefile
+├── api/blog/v1/
+│   ├── user.proto
+│   ├── post.proto
+│   ├── comment.proto
+│   └── (生成的 *.pb.go *_grpc.pb.go *_http.pb.go)
+├── cmd/blog/
+│   ├── main.go
+│   └── wire.go / wire_gen.go
+├── configs/config.yaml
+├── internal/
+│   ├── biz/{user.go, post.go, comment.go, biz.go,
+│   │        user_test.go, post_test.go, ...}  # alongside: 测试与代码同目录
+│   ├── data/{user.go, post.go, comment.go, data.go}
+│   ├── service/{user.go, post.go, comment.go, service.go}
+│   ├── server/{grpc.go, http.go, server.go}
+│   └── conf/{conf.proto, conf.pb.go}
+├── tests/
+│   └── integration/api_test.go          # 跨模块集成测试仍在 tests/
 ├── docs/
-│   ├── api.md                      # 接口文档
-│   └── db-schema.md                # 数据库说明
-└── reports/
-    ├── report-architect.md
-    ├── report-developer.md         # 如果有多个 developer，会各自写
-    └── report-tester.md
+│   ├── design/
+│   │   ├── ARCHITECTURE.md              # 架构师总图
+│   │   ├── api.md                       # 接口文档
+│   │   └── db-schema.md                 # 数据库说明
+│   └── delivery/
+│       └── checklist.md                 # PM 维护的交付 checklist
+└── .ai-rd-team/
+    └── runtime/
+        ├── manifest.yaml                # 权威索引
+        └── reports/                     # 阶段报告（过程）
+            ├── report-architect.md
+            ├── report-developer_1.md
+            ├── report-developer_2.md
+            ├── report-tester.md
+            ├── report-run-summary.md    # PM 总览
+            └── data-project-layout.yaml # 架构师声明的布局
 ```
 
 ## 验收步骤
 
 ```bash
-cd .ai-rd-team/runtime/artifacts/code
+cd <workspace>                          # 代码就在项目根
 
 # 1. 构建
 go build ./...
@@ -72,7 +83,8 @@ curl -H "Authorization: Bearer $TOKEN" \
 
 ## 关键观察点（打开 Web 面板看）
 
-- architect 先产出 proto + 数据库 schema
-- 两个 developer 并行实现（biz+data vs service+server），通过 send_message 协调 wire 装配
+- architect 先产出 `docs/design/ARCHITECTURE.md` + `docs/design/data-interfaces.yaml`（proto 对应）
+- 两个 developer 并行实现（biz+data vs service+server），通过 send_message 协调 wire 装配；代码**直接落项目根**
 - tester 在 developer 进入 working 后才开始写集成测试
 - 成员状态：spawning → working → waiting（等协作）→ done
+- `manifest.yaml` 里每条产出都带 `category: delivery | process`，方便 PM 在 checklist 里引用

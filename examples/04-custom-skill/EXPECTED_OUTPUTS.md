@@ -3,28 +3,29 @@
 ## 目录结构
 
 ```
-.ai-rd-team/runtime/artifacts/
-├── code/
-│   ├── app/
+<workspace>/                            # 项目根（交付物直接落这里）
+├── app/
+│   ├── __init__.py
+│   ├── main.py                         # 只做 include_router
+│   ├── routers/
 │   │   ├── __init__.py
-│   │   ├── main.py                    # 只做 include_router
-│   │   ├── routers/
-│   │   │   ├── __init__.py
-│   │   │   └── todos.py               # APIRouter + 5 个端点
-│   │   ├── schemas/
-│   │   │   ├── __init__.py
-│   │   │   └── todo.py                # TodoIn / TodoOut
-│   │   └── services/
-│   │       ├── __init__.py
-│   │       └── todo_service.py        # 业务逻辑
-│   ├── tests/
+│   │   └── todos.py                    # APIRouter + 5 个端点
+│   ├── schemas/
 │   │   ├── __init__.py
-│   │   ├── test_routers_todos.py      # 5+ 用例（每个端点）
-│   │   └── test_services.py           # 3+ 用例（业务函数）
-│   ├── pyproject.toml
-│   └── README.md（可选）
-└── reports/
-    └── report-developer.md（或 report-architect.md）
+│   │   └── todo.py                     # TodoIn / TodoOut
+│   └── services/
+│       ├── __init__.py
+│       └── todo_service.py             # 业务逻辑
+├── tests/
+│   ├── __init__.py
+│   ├── test_routers_todos.py           # 5+ 用例（每个端点）
+│   └── test_services.py                # 3+ 用例（业务函数）
+├── pyproject.toml
+├── README.md（可选）
+└── .ai-rd-team/runtime/
+    ├── manifest.yaml
+    └── reports/
+        └── report-developer.md         # 或 report-architect.md
 ```
 
 ## 关键文件抽样
@@ -91,7 +92,7 @@ class TodoOut(BaseModel):
 ## 验收命令
 
 ```bash
-cd .ai-rd-team/runtime/artifacts/code
+cd <workspace>                          # 代码就在项目根
 
 # 1. 装得上
 pip install -e .

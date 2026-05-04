@@ -257,7 +257,7 @@ ai-rd-team serve --port 8765 &
 | 总览 | 状态 / 成员数 / 近期事件 / **Pending bridge intents** 卡片 |
 | 团队 | 各成员 status / current_task / produced_files |
 | 消息 | 成员间 P2P 消息流 |
-| 制品 | `.ai-rd-team/runtime/artifacts/` 实时文件树 |
+| 制品 | 项目根下的交付物（代码 / docs / tests / deploy）+ `.ai-rd-team/runtime/` 下的过程数据，按 `manifest.yaml` 索引 |
 | 成本 | RP 消耗分布（spawn / message / broadcast / runtime） |
 
 **重点关注 "Pending bridge intents" 卡片**：
@@ -279,28 +279,35 @@ ai-rd-team serve --port 8765 &
 
 ## 第 7 步：验证产出
 
-成员完成后，runtime 目录会有所有产物：
+成员完成后，产出分两类（M7 新布局）：
 
 ```bash
-cd ~/demo/.ai-rd-team/runtime
+cd ~/demo
 
-# 产出的代码文件
-ls artifacts/
+# 交付物（代码 / 文档 / 测试 / 部署脚本）— 直接在项目根
+ls                            # 看到模块目录、docs/、tests/、Dockerfile 等
+tree docs/                    # 设计/需求/交付 checklist
+tree tests/                   # 测试代码（Python/JS 风格）
 
-# 事件流
-tail -20 events.jsonl
+# 过程数据（评审、阶段报告、日志）— 在 .ai-rd-team/runtime/
+ls .ai-rd-team/runtime/review/     # 评审记录
+ls .ai-rd-team/runtime/reports/    # 阶段 / 总结报告
+tail -20 .ai-rd-team/runtime/events.jsonl
+
+# 权威索引（所有 entry 含 category: delivery | process）
+cat .ai-rd-team/runtime/manifest.yaml
 
 # 最终成本
-cat cost-summary.yaml
+cat .ai-rd-team/runtime/cost-summary.yaml
 
 # 各成员终态
-ls state/members/
+ls .ai-rd-team/runtime/state/members/
 ```
 
-以 `01-smart-bookmark` 为例，产物可直接装来跑：
+以 `01-smart-bookmark` 为例，产物可直接装来跑（代码已经就在项目根）：
 
 ```bash
-cd ~/demo/.ai-rd-team/runtime/artifacts/code
+cd ~/demo
 pip install -e .
 pytest
 bookmark add https://vuejs.org --tag vue

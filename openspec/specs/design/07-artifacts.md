@@ -1,10 +1,19 @@
 # ai-rd-team 详细设计 - 07 制品体系
 
-> 文档版本：v1.0
+> 文档版本：v2.0（M7 重构）
 > 日期：2026-05-04
 > 颗粒度：中等详细
 > 依赖：`00-overview.md`、`01-engine.md`、`05-roles-skills.md`
 > 来自原型：P4（三种并发写策略已验证）
+>
+> **M7 重大语义变更**（见 `openspec/changes/archive/*relocate-artifacts-to-root*/`）：
+> - **交付物**（代码 / 文档 / 测试 / 部署脚本）→ 落**项目根**，不再埋在 `runtime/artifacts/` 下
+> - **过程数据**（评审 / 阶段报告 / 日志 / manifest）→ 保留 `.ai-rd-team/runtime/` 下
+> - `manifest.yaml` 从 `runtime/artifacts/manifest.yaml` 提升到 `runtime/manifest.yaml`，每条 entry 含 `category: delivery | process` 字段
+> - `ArtifactRecorder` 拆为 5 个分派方法（`write_code / write_doc / write_test / write_deploy / write_process`），按架构师声明的 `ProjectLayout` 决定具体子路径
+> - 详见本文档 §4（已按 M7 语义重写）与 `openspec/specs/artifact-placement/spec.md`
+>
+> 本文档 §5、§6、§8、§9 的文件格式 / 并发策略 / 版本管理 / 索引查询等规则**不受 M7 影响**。
 
 ---
 
@@ -93,115 +102,127 @@
 
 ---
 
-## 4. 目录结构
+## 4. 目录结构（M7 新语义）
 
-### 4.1 artifacts/ 完整结构
-
-基于原型 P1 验证 + 头脑风暴约定：
+### 4.1 两大类别：交付物 vs 过程数据
 
 ```
-<workspace>/.ai-rd-team/runtime/artifacts/
-├── requirements/               # 需求分析（analyst 产出）
-│   ├── spec-requirements.md
-│   ├── data-requirements.yaml
-│   └── spec-business-context.md
-│
-├── design/                     # 架构设计（architect 产出）
-│   ├── spec-architecture.md
-│   ├── spec-architecture-diagrams.md   # 或合并到主文档
-│   ├── data-interfaces.yaml            # API 契约
-│   ├── data-schemas.yaml               # DB / Redis / 协议定义
-│   ├── data-task-breakdown.yaml        # 任务拆分（给 developers 看）
-│   └── adr/                            # 决策记录（链接到 memory/decisions）
-│       └── README.md                   # 说明：真实 ADR 在 memory/decisions/
-│
-├── code/                       # 代码产出（developer 产出）
-│   ├── {developer_1-}user-service.go
-│   ├── {developer_2-}order-api.go
-│   ├── frontend/
-│   │   ├── UserProfile.vue
-│   │   └── ...
-│   └── miniprogram/
-│       └── ...
-│
-├── review/                     # 评审（reviewer 产出）
-│   ├── spec-review-user-module.md
-│   ├── data-review-issues-user-module.yaml
-│   └── log-review-rounds.jsonl         # 评审过程记录
-│
-├── test/                       # 测试（tester 产出）
-│   ├── spec-test-plan.md
-│   ├── test_user_service.py            # 测试代码
-│   ├── test_order_api.py
-│   ├── result-test-run-{timestamp}.md  # 每次执行结果
-│   └── data-bugs.yaml                  # Bug 清单
-│
-├── deployment/                 # 部署（devops 产出）
-│   ├── Dockerfile
-│   ├── docker-compose.yaml
-│   ├── deploy/
-│   │   ├── k8s-user-service.yaml
-│   │   └── ...
-│   ├── .github/workflows/ci.yaml       # （实际写到项目根目录的引用副本）
-│   └── report-deployment.md
-│
-├── reports/                    # 工作报告（pm + 各角色）
-│   ├── report-architect.md             # 架构师总结
-│   ├── report-phase-requirements.md    # 需求阶段总结
-│   ├── report-phase-dev.md             # 开发阶段总结
-│   ├── report-phase-review.md
-│   ├── report-phase-test.md
-│   └── report-run-summary.md           # 本次运行总览（pm 或 engine 写）
-│
-└── delivery/                   # 交付清单（最终产物索引）
-    ├── spec-delivery-checklist.md
-    └── data-delivery-manifest.yaml
+<project_root>/                          # 项目根：交付物直接可见
+├── <模块>/                               # 代码模块（由 layout.code_dirs 决定）
+│   ├── main.go
+│   └── xxx_test.go                      # Go 惯例：测试同目录（layout.tests_mode=alongside）
+├── docs/                                # 文档根（layout.docs_root，默认 "docs"）
+│   ├── requirements/                    # analyst 产出
+│   │   ├── REQUIREMENTS.md
+│   │   └── data-user-stories.yaml
+│   ├── design/                          # architect 产出
+│   │   ├── ARCHITECTURE.md
+│   │   ├── data-interfaces.yaml
+│   │   └── data-schemas.yaml
+│   ├── delivery/                        # 交付清单（人读版，pm 维护）
+│   │   └── checklist.md
+│   └── research/                        # 可选：技术研究笔记
+├── tests/                               # 测试根（layout.tests_mode=separate 时）
+│   └── test_xxx.py
+├── deploy/                              # 部署产物（非根级）
+│   └── k8s-xxx.yaml
+├── Dockerfile                           # 根级部署文件（layout.root_level_files 列表）
+├── docker-compose.yaml
+├── README.md
+└── .ai-rd-team/                         # 过程数据与元数据
+    ├── config.yaml / config.advanced.yaml
+    ├── memory/                          # 团队记忆（06-memory-system）
+    ├── commands/                        # 自定义命令
+    └── runtime/
+        ├── state/                       # 运行时状态
+        ├── logs/                        # 执行日志
+        ├── cost/                        # 成本账本
+        ├── messages/                    # 成员间消息
+        ├── adapter-intents/             # bridge 协议
+        ├── adapter-results/             # bridge 协议
+        ├── archive/                     # 历史 run 归档
+        ├── review/                      # reviewer 产出（过程）
+        │   ├── spec-review-user.md
+        │   └── log-review-rounds.jsonl
+        ├── reports/                     # pm 及各角色阶段报告
+        │   ├── report-phase-dev.md
+        │   ├── report-run-summary.md
+        │   └── data-project-layout.yaml # 架构师声明的 layout（可选）
+        ├── events.jsonl
+        ├── current-run.yaml
+        └── manifest.yaml                # 权威索引（delivery+process 所有条目）
 ```
 
-### 4.2 目录 ↔ 角色映射
+### 4.2 manifest.yaml 格式
 
-```python
-ROLE_TO_DIR = {
-    "pm": "reports",
-    "analyst": "requirements",
-    "architect": "design",
-    "developer": "code",
-    "reviewer": "review",
-    "tester": "test",
-    "devops": "deployment",
-}
-```
-
-**两个例外**：
-- **reports/** 是 **PM 主目录 + 各角色都写阶段报告**（不独占）
-- **delivery/** 由 PM 或 engine 在项目结束时统一产出
-
-### 4.3 代码产物的落位选择
-
-代码文件有两种落位策略：
-
-**策略 A：落到 `artifacts/code/`（原型阶段）**
-- 优点：便于回溯、不污染项目源目录
-- 缺点：不是最终产品位置，需要用户手动拷贝
-
-**策略 B：落到项目真实源码目录（如 `src/`, `pkg/`）**（推荐第一期默认）
-- 优点：跑起来就是真实项目
-- 缺点：可能覆盖已有文件
-
-**配置决定**：
+位置：`<project_root>/.ai-rd-team/runtime/manifest.yaml`
 
 ```yaml
-# config.advanced.yaml
 artifacts:
-  code_output:
-    strategy: "in_place"            # in_place / artifacts_only / both
-    # in_place: 写到项目真实目录（推荐）
-    # artifacts_only: 只写 artifacts/code/（用于评估阶段）
-    # both: 两处都写（artifacts/code/ 作为快照）
-    project_root_writable: true     # 是否允许写项目根目录（默认 true，由 security 覆盖）
+  - path: "mysh/main.go"                 # delivery: 相对项目根
+    kind: code
+    category: delivery
+    producer: developer_1
+    created_at: "2026-05-04T12:00:00"
+  - path: "docs/design/ARCHITECTURE.md"
+    kind: doc
+    category: delivery
+    producer: architect
+    created_at: "2026-05-04T11:30:00"
+  - path: "review/spec-review-user.md"   # process: 相对 runtime_dir（含 kind 前缀）
+    kind: review
+    category: process
+    producer: reviewer
+    created_at: "2026-05-04T14:00:00"
+last_updated: "2026-05-04T14:00:00"
 ```
 
-**safety 约束**：无论哪种策略，都必须遵守 `security.file_access.writable` 约束。
+### 4.3 角色 → 写入方法 → 落位 映射
+
+| 角色 | Recorder 方法 | 默认落位（示例 go 栈） |
+|------|--------------|-------------------|
+| `analyst` | `write_doc(category="requirements", ...)` | `docs/requirements/REQUIREMENTS.md` |
+| `architect` | `write_doc(category="design", ...)` | `docs/design/ARCHITECTURE.md` |
+| `developer` | `write_code(module=..., ...)` | `mysh/main.go`（由 `layout.code_dirs` 决定） |
+| `tester` | `write_test(module=..., ...)` | `mysh/xxx_test.go`（alongside）或 `tests/test_xxx.py`（separate） |
+| `devops` | `write_deploy(filename, ...)` | `Dockerfile`（根级）或 `deploy/k8s-xxx.yaml` |
+| `reviewer` | `write_process(kind="review", ...)` | `.ai-rd-team/runtime/review/spec-review-user.md` |
+| `pm` | `write_process(kind="report", ...)` | `.ai-rd-team/runtime/reports/report-run-summary.md` |
+
+### 4.4 ProjectLayout：架构师声明或框架默认
+
+落位由 `ProjectLayout` 决定，加载优先级：
+1. `<runtime_dir>/reports/data-project-layout.yaml`（架构师运行时声明）
+2. `config.advanced.yaml:artifacts.layout`（用户全局配置）
+3. memory `agent.d/tech-stack-selected.md` 关键词推断
+4. `DEFAULT_LAYOUTS["fallback"]`
+
+内置 6 档默认：`python / go / js / vue3 / wechat-mp / fallback`。字段见 `src/ai_rd_team/artifacts/layout.py`。
+
+架构师 yaml 示例：
+```yaml
+version: "1.0"
+base: go
+overrides:
+  code_dirs:
+    mysh: mysh
+    mysqler: mysqler
+  tests_mode: alongside
+```
+
+### 4.5 策略回顾（M7 前后对比）
+
+| 方面 | M1-M6（旧） | M7+（新） |
+|------|------------|----------|
+| 代码落位 | `runtime/artifacts/code/` | 项目根 `<module>/` |
+| 文档落位 | `runtime/artifacts/design/` 等 | `docs/design/` 等 |
+| 测试落位 | `runtime/artifacts/test/` | `tests/` 或代码旁（按 tests_mode） |
+| 部署脚本 | `runtime/artifacts/deployment/` | 项目根或 `deploy/` |
+| 评审/报告 | `runtime/artifacts/{review,reports}/` | `runtime/{review,reports}/` |
+| manifest 位置 | `runtime/artifacts/manifest.yaml` | `runtime/manifest.yaml` |
+| manifest path 语义 | 相对 `artifacts/` | delivery 相对项目根 / process 相对 runtime |
+| category 字段 | 无 | **必填** `delivery` 或 `process` |
+| 用户打开项目根 | 只见 `.ai-rd-team/` | **立刻看到代码和文档** |
 
 ---
 
@@ -856,29 +877,34 @@ T5: 完成，pm 写 report-run-summary.md + data-delivery-manifest.yaml
 
 ---
 
-## 13. 附录：制品命名速查表
+## 13. 附录：制品命名速查表（M7 新布局）
 
-| 想写什么 | 用什么文件名 | 放哪 | 策略 |
-|---------|-----------|------|------|
-| 需求分析文档 | `spec-requirements.md` | `requirements/` | S1 |
-| 需求条目（结构化） | `data-requirements.yaml` | `requirements/` | S1 |
-| 架构方案 | `spec-architecture.md` | `design/` | S1 |
-| 接口契约 | `data-interfaces.yaml` | `design/` | S1 |
-| 数据模型 | `data-schemas.yaml` | `design/` | S1 |
-| 任务拆分 | `data-task-breakdown.yaml` | `design/` | S1 |
-| 代码（默认项目源目录） | `{module}.{ext}` | `src/`、`web/` 等 | S1 |
-| 代码快照（若启用） | `developer_1-{module}.{ext}` | `code/` | S1 |
-| 评审报告 | `spec-review-{module}.md` | `review/` | S1 |
-| 评审 issues | `data-review-issues-{module}.yaml` | `review/` | S1 |
-| 评审过程日志 | `log-review-rounds.jsonl` | `review/` | S3 |
-| 测试计划 | `spec-test-plan.md` | `test/` | S1 |
-| 测试代码 | `test_{module}.{ext}` | `test/` | S1 |
-| 测试执行结果 | `result-test-run-{ts}.md` | `test/` | S1 |
-| Bug 列表 | `data-bugs.yaml` | `test/` | S1 + 版本备份 |
-| Dockerfile / CI | 按惯例 | `deployment/` or 项目根 | S1 |
-| 部署报告 | `report-deployment.md` | `deployment/` | S1 |
-| 工作报告（角色） | `report-{role}.md` | `reports/` | S1 |
-| 阶段报告 | `report-phase-{name}.md` | `reports/` | S1 |
-| 运行总结 | `report-run-summary.md` | `reports/` | S1 |
-| 交付清单 | `spec-delivery-checklist.md` | `delivery/` | S1 |
-| 交付索引 | `data-delivery-manifest.yaml` | `delivery/` | S1（ArtifactRecorder 增量更新） |
+| 想写什么 | 文件名 | 落在哪（项目根相对 / runtime 相对） | Recorder 方法 | 类别 |
+|---------|-------|---------------------------------|--------------|------|
+| 需求分析文档 | `REQUIREMENTS.md` | `docs/requirements/REQUIREMENTS.md` | `write_doc(category="requirements")` | delivery |
+| 需求条目（结构化） | `data-user-stories.yaml` | `docs/requirements/data-user-stories.yaml` | `write_doc(category="requirements")` | delivery |
+| 架构方案 | `ARCHITECTURE.md` | `docs/design/ARCHITECTURE.md` | `write_doc(category="design")` | delivery |
+| 接口契约 | `data-interfaces.yaml` | `docs/design/data-interfaces.yaml` | `write_doc(category="design")` | delivery |
+| 数据模型 | `data-schemas.yaml` | `docs/design/data-schemas.yaml` | `write_doc(category="design")` | delivery |
+| 任务拆分 | `data-task-breakdown.yaml` | `docs/design/data-task-breakdown.yaml` | `write_doc(category="design")` | delivery |
+| 技术研究 | `TECH_RESEARCH.md` | `docs/research/TECH_RESEARCH.md` | `write_doc(category="research")` | delivery |
+| 代码 | `main.go` / `app.py` 等 | `<module>/<filename>`（由 `layout.code_dirs` 决定） | `write_code(module, filename)` | delivery |
+| 测试代码（separate） | `test_{module}.py` | `tests/test_{module}.py` | `write_test(module=None, filename)` | delivery |
+| 测试代码（alongside） | `{name}_test.go` | `<module>/{name}_test.go` | `write_test(module, filename)` | delivery |
+| 测试执行结果 | `result-test-run-{ts}.md` | `.ai-rd-team/runtime/reports/result-test-run-{ts}.md` | `write_process(kind="report", ext="md")` | process |
+| Bug 列表 | `data-bugs.yaml` | `docs/delivery/data-bugs.yaml` 或 runtime/reports | 按 team 约定 | delivery/process |
+| Dockerfile | `Dockerfile` | 项目根（在 `layout.root_level_files`） | `write_deploy(filename)` | delivery |
+| k8s yaml | `k8s-{service}.yaml` | `deploy/k8s-{service}.yaml` | `write_deploy(filename)` | delivery |
+| 评审报告 | `spec-review-{module}.md` | `.ai-rd-team/runtime/review/spec-review-{module}.md` | `write_process(kind="review")` | process |
+| 评审 issues | `data-review-issues-{module}.yaml` | `.ai-rd-team/runtime/review/data-review-issues-{module}.yaml` | `write_process(kind="review", ext="yaml")` | process |
+| 评审过程日志 | `log-review-rounds.jsonl` | `.ai-rd-team/runtime/log/log-review-rounds.jsonl` | `write_process(kind="log", ext="jsonl")` | process |
+| 阶段报告 | `report-phase-{name}.md` | `.ai-rd-team/runtime/reports/report-phase-{name}.md` | `write_process(kind="report")` | process |
+| 运行总结 | `report-run-summary.md` | `.ai-rd-team/runtime/reports/report-run-summary.md` | `write_process(kind="report")` | process |
+| 交付 checklist（人读） | `checklist.md` | `docs/delivery/checklist.md` | `write_doc(category="delivery")` | delivery |
+| 项目布局声明 | `data-project-layout.yaml` | `.ai-rd-team/runtime/reports/data-project-layout.yaml` | 架构师手写 | process |
+| 权威索引 | `manifest.yaml` | `.ai-rd-team/runtime/manifest.yaml` | 由 ArtifactRecorder 自动维护 | — |
+
+**并发写策略**（S1/S2/S3 见 §6）：
+- `spec-*` / `data-*` / `result-*` / `report-*` / `code` / `test` / `deploy` 文件 → S1（单 owner 独占，直接写）
+- `manifest.yaml` / `state/*.yaml` / `current-run.yaml` → S2（原子 rename）
+- `events.jsonl` / `log-*.jsonl` / `adapter-calls.jsonl` → S3（fcntl 锁）

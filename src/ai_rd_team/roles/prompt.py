@@ -67,10 +67,29 @@ $project_description
 **本次运行档位**：$run_mode
 
 
-# 工作目录
+# 工作目录与产出落位（M7 新语义）
 
-所有产出文件必须写入：
-`$workspace/.ai-rd-team/runtime/artifacts/$role_dir/`
+**项目根目录**：`$workspace`
+**过程数据目录**：`$workspace/.ai-rd-team/runtime/`
+
+> **重要**：最终交付物（代码 / 文档 / 测试 / 部署脚本）直接写到**项目根目录**下；
+> 过程数据（评审 / 阶段报告 / 日志）写到 `.ai-rd-team/runtime/` 下。
+
+## 根据你的角色决定落位（`$role_name`）
+
+- **analyst / architect** → 文档落到 `$workspace/docs/{类别}/`
+  - analyst：`docs/requirements/REQUIREMENTS.md` / `docs/requirements/data-user-stories.yaml`
+  - architect：`docs/design/ARCHITECTURE.md` / `docs/design/data-interfaces.yaml`
+- **developer** → 代码落到 `$workspace/<模块目录>/`（如 `mysh/main.go`、`src/app.py`）
+  - 具体模块目录由架构师的技术栈选型决定；若不清楚，按语言惯例（Go 直接根目录 / Python src/）
+- **tester** → 测试按技术栈惯例：
+  - Python/JS → `$workspace/tests/test_xxx.py`
+  - Go → 与被测代码同目录（`mysh/xxx_test.go`）
+- **devops** → 部署脚本：`Dockerfile` / `docker-compose.yaml` 直接根目录；k8s yaml 等放 `$workspace/deploy/`
+- **reviewer** → 评审报告落到 `$workspace/.ai-rd-team/runtime/review/spec-review-{module}.md`
+- **pm** → 阶段报告 / 运行总结落到 `$workspace/.ai-rd-team/runtime/reports/report-{phase}.md`
+
+## 状态自报
 
 每完成一个关键步骤，更新自己的状态到：
 `$workspace/.ai-rd-team/runtime/state/members/$instance_name.yaml`
@@ -83,7 +102,7 @@ status: "working"      # idle / working / waiting / done / failed
 current_task: "当前在做什么"
 last_updated: "ISO 8601 时间戳"
 progress: "50%"
-produced_files: []
+produced_files: []     # 本次产出的文件路径（相对项目根）
 blocking_issues: []
 ```
 
@@ -101,7 +120,7 @@ $expected_artifacts
 ✅ **允许做的**：
 - 与团队中其他成员自由 send_message（P2P）
 - 读取 workspace 下的文件
-- 写入 `$workspace/.ai-rd-team/runtime/artifacts/$role_dir/`
+- 按你的角色职责写入对应位置（见上文"工作目录与产出落位"一节）
 - 执行安全命令（如 pytest / go test / npm run 等）
 
 ❌ **禁止做的**：
@@ -127,7 +146,10 @@ $agent_d_memory_injected
 2. **主动沟通**：有问题直接找相关队友，不要闷头做。
 3. **写文件即汇报**：产出文件 + 更新 state 文件，Web 面板会自动展示你的进度。
 4. **遇到真正的死局**：用 send_message 向 pm 报告（若无 pm 则向 main）。
-5. **完成工作**：全部完成后，写一份 `report-$role_name.md` 到 artifacts/reports/，并 send_message 汇报。
+5. **完成工作**：全部完成后，写一份总结报告并 send_message 汇报。总结文件位置按角色：
+   - pm → `$workspace/.ai-rd-team/runtime/reports/report-run-summary.md`
+   - 其它角色 → `$workspace/.ai-rd-team/runtime/reports/report-$role_name.md`（过程性总结）
+   - 需要给用户看的最终交付 checklist → `$workspace/docs/delivery/checklist.md`（由 pm 维护）
 
 
 # 当前已知的团队约定
@@ -182,13 +204,32 @@ _DEFAULT_RESPONSIBILITIES: dict[str, list[str]] = {
 }
 
 _DEFAULT_ARTIFACTS: dict[str, list[str]] = {
-    "pm": ["spec-project-plan.md", "report-final.md"],
-    "analyst": ["spec-requirements.md", "data-user-stories.yaml"],
-    "architect": ["spec-design.md", "data-interfaces.yaml"],
-    "developer": ["实现代码（写入项目源码目录）", "对应单元测试"],
-    "reviewer": ["spec-review-{module}.md"],
-    "tester": ["测试代码", "result-test-{module}.md"],
-    "devops": ["spec-deployment.md", "部署脚本"],
+    "pm": [
+        ".ai-rd-team/runtime/reports/report-run-summary.md",
+        "docs/delivery/checklist.md",
+    ],
+    "analyst": [
+        "docs/requirements/REQUIREMENTS.md",
+        "docs/requirements/data-user-stories.yaml",
+    ],
+    "architect": [
+        "docs/design/ARCHITECTURE.md",
+        "docs/design/data-interfaces.yaml",
+        ".ai-rd-team/runtime/reports/data-project-layout.yaml  # 可选：声明项目布局",
+    ],
+    "developer": [
+        "<module>/<source>.<ext>  # 代码直接进项目根的模块目录",
+        "<module>/<source>_test.<ext> 或 tests/test_<source>.py  # 按技术栈惯例",
+    ],
+    "reviewer": [".ai-rd-team/runtime/review/spec-review-{module}.md"],
+    "tester": [
+        "tests/test_{module}.py 或 {module}/{name}_test.go  # 按技术栈惯例",
+        ".ai-rd-team/runtime/reports/result-test-{module}.md  # 测试执行结果",
+    ],
+    "devops": [
+        "Dockerfile / docker-compose.yaml  # 直接根目录",
+        "deploy/  # 其它部署产物（如 k8s yaml）",
+    ],
 }
 
 

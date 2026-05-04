@@ -53,6 +53,7 @@ ai-rd-team run --budget 800 "需求"
 - 自定义 Hook
 - 调整 RP 权重
 - 配置模型降级链
+- **声明项目布局**（M7 新）——指定代码 / 文档 / 测试落在项目根的哪里
 
 ```yaml
 # 只覆盖你想改的字段，其他字段走 preset 默认值
@@ -96,13 +97,29 @@ hooks:
       command: "python scripts/feishu.py --run $RUN_ID --reason $REASON"
       on_failure: "warn"
 
+# M7：交付物落位（可选；架构师角色会在运行时用
+# .ai-rd-team/runtime/reports/data-project-layout.yaml 覆盖本段）
+artifacts:
+  layout:
+    base: "go"                     # python / go / js / vue3 / wechat-mp / fallback
+    overrides:
+      code_dirs:
+        mysh: "mysh"                # 项目根下的子目录
+        mysqler: "mysqler"
+      tests_mode: "alongside"       # separate（tests/ 下）或 alongside（代码旁，Go 风格）
+      docs_root: "docs"             # 文档根目录名
+      # docs_subdirs: {design: "arch"}   # 可自定义每个类别的子目录名
+
 security:
   file_access:
     writable:
-      - ".ai-rd-team/runtime/artifacts/"
+      # M7：交付物直接进项目根（代码/docs/tests/部署脚本），过程数据进 runtime
+      - "./"                                # 允许写项目根（代码、docs、tests、Dockerfile 等）
+      - ".ai-rd-team/runtime/"              # 允许写过程数据（review/reports/state/logs/...）
     forbidden:
       - ".git/"
       - ".env"
+      - ".ai-rd-team/memory/decisions/"     # ADR 不可被普通成员改写
 ```
 
 ## ConfigInference：自动填默认值

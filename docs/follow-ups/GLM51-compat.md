@@ -55,10 +55,11 @@ python3 driver.py
 - `team_delete` × 1
 
 ### 4. 采集数据
-- `runtime/events.jsonl` → 统计 `bridge_auto_responded` 条数（预期 ≥ 4）
-- `runtime/cost-summary.yaml` → 总 RP
-- `runtime/artifacts/` → 文件数
-- `cd runtime/artifacts/<project> && go mod tidy && go build ./... && go vet ./...`
+- `.ai-rd-team/runtime/events.jsonl` → 统计 `bridge_auto_responded` 条数（预期 ≥ 4）
+- `.ai-rd-team/runtime/cost-summary.yaml` → 总 RP
+- `.ai-rd-team/runtime/manifest.yaml` → 所有产出文件清单（含 category）
+- （M7 新布局）项目根下直接 `go mod tidy && go build ./... && go vet ./...`
+  - 若是老 0.1.x workspace，路径在 `.ai-rd-team/runtime/artifacts/<project>/`
 
 ### 5. 撰写报告 `VERIFIED-m5-glm.md`
 四章节：

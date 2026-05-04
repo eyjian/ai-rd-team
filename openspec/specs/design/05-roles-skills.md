@@ -844,10 +844,13 @@ ai_rd_team/skills/builtin/          # 代码仓库里
 **本次运行档位**：{run_mode}（lite/standard/full）
 
 
-# 工作目录
+# 工作目录（M7 新语义）
 
-所有产出文件必须写入：
-`{workspace}/.ai-rd-team/runtime/artifacts/{role_dir}/`
+产出文件按你的角色落位（由 `ArtifactRecorder` + `ProjectLayout` 决定）：
+- **交付物**（代码 / 文档 / 测试 / 部署脚本）→ **项目根**（如 `<module>/main.go`、`docs/design/ARCHITECTURE.md`）
+- **过程数据**（评审 / 阶段报告）→ `{workspace}/.ai-rd-team/runtime/{review,reports}/`
+
+权威索引：`{workspace}/.ai-rd-team/runtime/manifest.yaml`
 
 每个成员都要定期（每完成一个关键步骤）更新自己的状态到：
 `{workspace}/.ai-rd-team/runtime/state/members/{instance_name}.yaml`
@@ -911,7 +914,9 @@ blocking_issues: []
 2. **主动沟通**：有问题直接找相关队友，不要闷头做。
 3. **写文件即汇报**：产出文件 + 更新 state 文件，Web 面板会自动展示你的进度。
 4. **遇到真正的死局**：用 send_message 向 pm 报告（而不是 main）。
-5. **完成工作**：全部完成后，写一份 `report-{role_name}.md` 放到 artifacts/reports/，并 send_message 给 pm（若 pm 存在）或 main（若无 pm）。
+5. **完成工作**：全部完成后，写一份总结并 send_message 给 pm（若 pm 存在）或 main（若无 pm）。总结位置：
+   - pm → `runtime/reports/report-run-summary.md` + 更新 `docs/delivery/checklist.md`
+   - 其它角色 → `runtime/reports/report-{role_name}.md`（过程性总结）
 
 
 # 当前已知的团队约定
@@ -1087,8 +1092,8 @@ current_task: "设计用户管理模块接口"
 last_updated: "2026-05-03T21:48:30Z"
 progress: "60%"
 produced_files:
-  - "artifacts/design/spec-user-module.md"
-  - "artifacts/design/data-interfaces.yaml"
+  - "docs/design/ARCHITECTURE.md"                 # M7：项目根相对
+  - "docs/design/data-interfaces.yaml"
 blocking_issues: []
 waiting_for: []                       # 等待谁的响应
 communication_log:                    # 最近 N 条 send_message 摘要
@@ -1270,12 +1275,12 @@ pm → main: "项目完成"
 
 ## 14. 附录：角色速查表（实现参考）
 
-| name | display | scalable | skills 数 | 产出主文件前缀 |
-|------|---------|---------|---------|--------------|
-| pm | 周立项 | no | 4 | report-phase-{name}.md |
-| analyst | 沈需求 | no | 4 | spec-requirements.md |
-| architect | 陈架构 | no | 10 | spec-architecture.md |
-| developer | 林{N}号 | yes (≤5) | 6+ | {module}.{ext} |
-| reviewer | 王{N}号 | yes (≤3) | 3 | spec-review-{module}.md |
-| tester | 赵{N}号 | yes (≤3) | 4 | test-{module}.{ext} |
+| name | display | scalable | skills 数 | 主要落位（M7 新） |
+|------|---------|---------|---------|------------------|
+| pm | 周立项 | no | 4 | `.ai-rd-team/runtime/reports/report-*.md` + `docs/delivery/checklist.md` |
+| analyst | 沈需求 | no | 4 | `docs/requirements/REQUIREMENTS.md` + `data-user-stories.yaml` |
+| architect | 陈架构 | no | 10 | `docs/design/ARCHITECTURE.md` + `data-interfaces.yaml` |
+| developer | 林{N}号 | yes (≤5) | 6+ | `<module>/{file}.{ext}`（项目根） |
+| reviewer | 王{N}号 | yes (≤3) | 3 | `.ai-rd-team/runtime/review/spec-review-{module}.md` |
+| tester | 赵{N}号 | yes (≤3) | 4 | `tests/test-{module}.{ext}`（separate）或 `<module>/{name}_test.{ext}`（alongside） |
 | devops | 吴部署 | no | 6 | Dockerfile, deploy/*.yaml |

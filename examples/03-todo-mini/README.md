@@ -25,7 +25,7 @@ Standard 档默认（architect + developer × 2 + tester）
 ## 预期文件树
 
 ```
-.ai-rd-team/runtime/artifacts/code/
+<workspace>/                          # 项目根（交付物直接落这里）
 ├── miniprogram/
 │   ├── app.js / app.json / app.wxss
 │   ├── project.config.json
@@ -60,7 +60,7 @@ ai-rd-team run "$(cat REQUIREMENT.md)"
 成员产出后：
 
 1. 下载微信开发者工具
-2. 导入 `.ai-rd-team/runtime/artifacts/code/` 作为项目目录
+2. 导入 `<workspace>/` 作为项目目录（小程序主目录在 `miniprogram/` 子目录下）
 3. 预览效果
 
 ## 验收标准

@@ -67,8 +67,16 @@
 │   ├── model-history.jsonl          # 模型切换历史
 │   └── post-run.jsonl               # 事后填入的真实消耗
 │
-├── artifacts/                       # 制品（见 07-artifacts.md）
-│   └── ...
+├── manifest.yaml                    # M7：权威索引（delivery + process 所有条目）
+│
+├── review/                          # 过程：reviewer 产出（M7 新位置）
+│   ├── spec-review-user.md
+│   └── log-review-rounds.jsonl
+│
+├── reports/                         # 过程：pm 及各角色阶段报告（M7 新位置）
+│   ├── report-phase-dev.md
+│   ├── report-run-summary.md
+│   └── data-project-layout.yaml     # 架构师可选：声明 ProjectLayout
 │
 ├── logs/
 │   ├── engine.log                   # 引擎日志（Python logging）
@@ -78,6 +86,8 @@
     └── run-{run_id}/
         └── ...（整个 runtime 子集的快照）
 ```
+
+**M7 注意**：`runtime/artifacts/` 目录已废弃；交付物（代码 / 文档 / 测试 / 部署脚本）直接落项目根下，见 `07-artifacts.md §4`。
 
 ---
 
@@ -157,8 +167,8 @@ progress: "60%"                                # 粗略进度（字符串）
 
 # 产出
 produced_files:
-  - "artifacts/design/spec-architecture.md"
-  - "artifacts/design/data-interfaces.yaml"
+  - "docs/design/ARCHITECTURE.md"                 # M7：文档进 docs/，相对项目根
+  - "docs/design/data-interfaces.yaml"
 
 # 阻塞
 blocking_issues:
@@ -255,10 +265,10 @@ members:
   "to": "developer_1",
   "type": "message",
   "summary": "接口设计已就绪",
-  "content": "接口已完成，详见 artifacts/design/data-interfaces.yaml...",
+  "content": "接口已完成，详见 docs/design/data-interfaces.yaml...",
   "triggered_by": "main->architect:start_task",  
   "related_artifacts": [
-    "artifacts/design/data-interfaces.yaml"
+    "docs/design/data-interfaces.yaml"
   ],
   "estimated_tokens": 45
 }
@@ -819,9 +829,11 @@ def try_resume(engine, current_run: dict) -> bool:
 约 1 分钟后：
 
 ```
-├── artifacts/design/
-│   ├── spec-architecture.md        (architect 写的)
+# 项目根（交付物直接可见）
+├── docs/design/
+│   ├── ARCHITECTURE.md             (architect 写到 docs/，M7 新位置)
 │   └── data-interfaces.yaml        (architect 写的)
+# .ai-rd-team/runtime/ 下（过程数据）
 ├── messages/
 │   ├── 20260504-100000-main-architect.json
 │   ├── 20260504-100045-architect-developer_1.json   (接口就绪)

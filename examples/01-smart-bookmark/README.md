@@ -19,19 +19,20 @@
 ## 预期文件树（成员产出后）
 
 ```
-.ai-rd-team/runtime/artifacts/
-├── code/
-│   ├── smart_bookmark/
-│   │   ├── __init__.py
-│   │   ├── __main__.py       # CLI 入口（argparse）
-│   │   ├── store.py          # JSON 存储
-│   │   └── models.py         # Bookmark dataclass
-│   ├── tests/
-│   │   ├── test_store.py
-│   │   └── test_cli.py
-│   └── pyproject.toml        # 可安装配置
-└── reports/
-    └── report-developer.md
+<workspace>/                  # 项目根（交付物直接落这里）
+├── smart_bookmark/
+│   ├── __init__.py
+│   ├── __main__.py           # CLI 入口（argparse）
+│   ├── store.py              # JSON 存储
+│   └── models.py             # Bookmark dataclass
+├── tests/
+│   ├── test_store.py
+│   └── test_cli.py
+├── pyproject.toml
+└── .ai-rd-team/runtime/      # 过程数据
+    ├── manifest.yaml
+    └── reports/
+        └── report-developer.md
 ```
 
 ## 如何运行
@@ -50,10 +51,10 @@ ai-rd-team run "$(cat REQUIREMENT.md)"
 ## 成功验收
 
 1. `.ai-rd-team/runtime/state/members/developer.yaml` 的 `status: done`
-2. `artifacts/code/tests/test_store.py` 存在，且 `pytest` 全过
+2. `tests/test_store.py` 存在（项目根下），且 `pytest` 全过
 3. 可以实际把产出代码装起来用：
    ```bash
-   cd .ai-rd-team/runtime/artifacts/code
+   cd <workspace>                   # 代码已经就在项目根
    pip install -e .
    bookmark add https://vuejs.org --tag vue
    bookmark list
@@ -67,5 +68,5 @@ ai-rd-team run "$(cat REQUIREMENT.md)"
 
 ## 可能遇到的问题
 
-- **成员产出路径错误**：Prompt 已指定 `artifacts/code/`，不应该写到项目根目录
+- **成员产出路径错误**：M7 后代码直接落项目根；若架构师没声明 layout，会按 `tech-stack-selected.md` 的 Python 关键词用默认（`src/` + `tests/`），实际小项目架构师也常选择不加 src/ 直接用 `smart_bookmark/` 包
 - **测试未写**：检查 `memory/agent.d/cli-spec.md` 是否明确要求「每个模块都有对应测试」

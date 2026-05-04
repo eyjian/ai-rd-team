@@ -26,7 +26,7 @@ Standard 档默认：**architect × 1 + developer × 2 + tester × 1**
 ## 预期文件树
 
 ```
-.ai-rd-team/runtime/artifacts/code/
+<workspace>/                              # 项目根（代码直接落这里）
 ├── api/blog/v1/
 │   ├── blog.proto                  # 接口定义
 │   ├── blog.pb.go                  # 生成
@@ -79,7 +79,7 @@ ai-rd-team run "$(cat REQUIREMENT.md)"
 
 ## 验收标准
 
-1. `cd .ai-rd-team/runtime/artifacts/code && go build ./...` 通过
+1. `cd <workspace> && go build ./...` 通过（代码就在项目根）
 2. `go test ./... -race` 通过
 3. proto 文件能 `kratos proto client` 重新生成
 4. 启动后 curl 测试能走通注册 / 登录 / 发帖流程

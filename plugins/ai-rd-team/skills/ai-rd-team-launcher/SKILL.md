@@ -88,7 +88,15 @@ ai-rd-team run "<用户需求>" --mode <lite/standard/full> --no-onboarding 2>&1
 
 2. 成员之间互发消息时（通过 send_message 调用），你只负责投递，**不介入内容**。
 
-3. 成员产出的文件在 `.ai-rd-team/runtime/artifacts/<role_dir>/`，可随时向用户展示。
+3. 成员产出的文件分两类（M7 新布局）：
+   - **交付物**（代码 / 文档 / 测试 / 部署脚本）→ 直接落**项目根**
+     - 代码：`<project_root>/<模块目录>/`（如 `mysh/main.go`）
+     - 文档：`<project_root>/docs/design/`、`docs/requirements/` 等
+     - 测试：`<project_root>/tests/` 或与代码同目录（Go 风格）
+     - 部署：`Dockerfile` 在根目录；`<project_root>/deploy/` 下放其它
+   - **过程数据**（评审 / 阶段报告 / 日志）→ `.ai-rd-team/runtime/{review,reports,logs}/`
+   - 权威索引：`.ai-rd-team/runtime/manifest.yaml`（每条 entry 含 `category: delivery|process` 字段）
+   - 可随时向用户展示这些文件
 
 ### Step 6：结束
 
@@ -102,14 +110,16 @@ ai-rd-team run "<用户需求>" --mode <lite/standard/full> --no-onboarding 2>&1
 
 1. 向成员发 `shutdown_request`（通过 send_message）
 2. 调用 `team_delete`
-3. 向用户汇总产出：列出 `artifacts/` 下的所有文件
+3. 向用户汇总产出：
+   - 交付物：列出项目根下的代码目录、`docs/`、`tests/`、`Dockerfile` 等
+   - 读 `.ai-rd-team/runtime/manifest.yaml` 获得权威文件清单（按 category 分档）
 4. 展示 `runtime/events.jsonl` 的关键节点
 
 ## 与用户的沟通风格
 
 - **行动先于请示**：用户说"做 xxx"，你就直接启动，不要反复确认细节
 - **关键时刻通知**：成员派发完成、有人完成任务、需要用户决策时才打断用户
-- **产出可见**：随时可以给用户看 `artifacts/` 下的文件列表和内容
+- **产出可见**：随时可以给用户看项目根（代码 / docs/ / tests/）和 `.ai-rd-team/runtime/manifest.yaml` 的内容
 
 ## 典型对话示例
 
@@ -133,8 +143,8 @@ ai-rd-team run "<用户需求>" --mode <lite/standard/full> --no-onboarding 2>&1
 
 你：[监测到多个 intent 并处理完毕]
     
-    📝 架构师已产出：artifacts/design/spec-design.md
-    💻 开发者正在实现接口...
+    📝 架构师已产出：docs/design/ARCHITECTURE.md
+    💻 开发者正在实现接口（落到项目根的模块目录）...
 
 ...
 ```

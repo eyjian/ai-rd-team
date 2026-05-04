@@ -10,6 +10,7 @@
 4. [Skills 指南](04-skills.md) — 内置 Skills、自定义 Skills、如何影响成员行为
 5. [成本控制](05-cost-control.md) — RP 计量、预算、smart_pause、模型降级
 6. [Bridge 与 Auto-Responder](06-bridge-and-auto-responder.md)（M5+）— E2E 主 Agent 只需应答 4 类 intent
+7. [产出物落位](07-artifact-placement.md)（M7+）— 交付物进项目根 vs 过程数据进 runtime/，架构师如何声明布局
 
 其他主题（记忆、Hook、CLI）暂参考：
 

@@ -34,25 +34,24 @@
 ## 预期文件树（成员产出后）
 
 ```
-.ai-rd-team/runtime/artifacts/
-├── code/
-│   ├── app/
+<workspace>/                     # 项目根（交付物直接落这里）
+├── app/
+│   ├── __init__.py
+│   ├── main.py              # 只做 FastAPI + include_router，不直接 @app.get
+│   ├── routers/
 │   │   ├── __init__.py
-│   │   ├── main.py              # 只做 FastAPI + include_router，不直接 @app.get
-│   │   ├── routers/
-│   │   │   ├── __init__.py
-│   │   │   └── todos.py         # APIRouter(prefix="/todos", tags=["todos"])
-│   │   ├── schemas/
-│   │   │   ├── __init__.py
-│   │   │   └── todo.py          # Pydantic v2 BaseModel
-│   │   └── services/
-│   │       ├── __init__.py
-│   │       └── todo_service.py  # 业务逻辑（纯函数优先）
-│   ├── tests/
-│   │   ├── test_routers_todos.py  # 使用 TestClient
-│   │   └── test_services.py       # 单测业务逻辑
-│   └── pyproject.toml
-└── reports/
+│   │   └── todos.py         # APIRouter(prefix="/todos", tags=["todos"])
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   └── todo.py          # Pydantic v2 BaseModel
+│   └── services/
+│       ├── __init__.py
+│       └── todo_service.py  # 业务逻辑（纯函数优先）
+├── tests/
+│   ├── test_routers_todos.py  # 使用 TestClient
+│   └── test_services.py       # 单测业务逻辑
+├── pyproject.toml
+└── .ai-rd-team/runtime/reports/
     └── report-developer.md
 ```
 
@@ -81,7 +80,7 @@ ai-rd-team run "$(cat REQUIREMENT.md)"
 运行完成后：
 
 ```bash
-cd .ai-rd-team/runtime/artifacts/code
+cd <workspace>                   # 代码就在项目根
 pip install -e .
 pytest
 ```

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-rd-team"
-version = "0.1.0b1"
+version = "0.2.0a1"
 description = "Self-driven digital research team: a multi-agent collaboration framework for AI-assisted software development"
 readme = { file = "README.md", content-type = "text/markdown" }
 license = { file = "LICENSE" }
@@ -28,7 +28,7 @@ keywords = [
     "code-generation",
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Environment :: Web Environment",
     "Framework :: FastAPI",
