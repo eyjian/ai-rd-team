@@ -22,6 +22,12 @@
 
 不想读文档？直接看 [examples/](../examples/) 三个真实案例。
 
+## Follow-ups（待办 / 独立验证）
+
+[`follow-ups/`](follow-ups/) 目录记录那些**从某个 openspec change 拆出来、独立推进**的小任务——通常是纯验证、无代码变更、无 spec delta，因此不走 openspec change 体系：
+
+- [GLM-5.1 兼容性基线 E2E](follow-ups/GLM51-compat.md) — 从 M5 `reduce-bridge-burden` 6.4/6.5 拆出，等待在 GLM-5.1 会话中执行。
+
 ## 设计文档（进阶）
 
 如果你想贡献代码或深入原理，请阅读 [openspec/specs/design/](../openspec/specs/design/) 下的 12 份详细设计文档。

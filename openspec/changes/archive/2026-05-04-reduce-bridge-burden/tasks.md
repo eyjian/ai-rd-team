@@ -80,21 +80,22 @@
   - **验收**：报告含上述 4 类内容，数据真实。
 - [x] 6.3 独立运行 `pytest -q`、`ruff check .`、`ruff format --check .`（针对 src + tests，prototype 可豁免）
   - **验收**：全部退出码 0；pytest 425 passed、ruff check 全绿。
-- [ ] 6.4 在 CodeBuddy 侧把主 Agent 模型从 Claude-Opus-4.7 切到 **GLM-5.1**（不改 ai-rd-team 任何代码），再跑一次 `prototype/M4-example2-e2e/` Standard 档 blog-api E2E，记录 GLM-5.1 基线
+- [~] 6.4 在 CodeBuddy 侧把主 Agent 模型从 Claude-Opus-4.7 切到 **GLM-5.1**（不改 ai-rd-team 任何代码），再跑一次 `prototype/M4-example2-e2e/` Standard 档 blog-api E2E，记录 GLM-5.1 基线
   - **验收**：run_id 不同于 6.1；driver 正常结束；无人为干预手动应答次数 ≤ 6（与 Claude 对齐，证明 M5 的"减负效果对模型无关"）；若成员 spawn / send_message 工具调用出现明显格式错误，记录到 issue 但不阻塞本任务（本任务目标是产出对比数据，不保证 100% 成功）。
-  - **状态**：⏸️ 阻塞外部条件——需在**另起一个 CodeBuddy 会话 + 模型切到 GLM-5.1** 后由用户/操作者执行。当前 session 是 Claude-Opus-4.7，无法自我切换底层模型。执行步骤：①CodeBuddy 设置 → 模型 → 选 GLM-5.1；②新建会话，`cd prototype/M4-example2-e2e && rm -rf .ai-rd-team/runtime quota-home driver.log driver.stdout.log`；③`python3 driver.py` 启动；④按 Claude 版 E2E 相同节奏手动应答 7 次 intent（team_create + task×4 + send_message×1 + team_delete×1）；⑤观察 events.jsonl 里 `bridge_auto_responded` 条数是否与 Claude 版一致（预期 4 条 shutdown_request 自动应答）；⑥跑 `go mod tidy && go build ./...` 验证产物。
-- [ ] 6.5 产出 `prototype/M4-example2-e2e/VERIFIED-m5-glm.md` 对比报告，含：
+  - **状态**：🔀 deferred → 拆分为独立 follow-up，跟踪文档 `docs/follow-ups/GLM51-compat.md`（不走 openspec change 体系：零代码变更 / 无 spec delta，openspec schema 要求至少一条 delta，强行走反而造假）。原因：本任务阻塞于"用户在 CodeBuddy 侧切到 GLM-5.1 会话"这一外部条件，且其验收目标（模型兼容性）与 M5 主体（减负能力）正交，不阻塞 M5 归档。
+- [~] 6.5 产出 `prototype/M4-example2-e2e/VERIFIED-m5-glm.md` 对比报告，含：
   - 基础数据对比表：模型 / run_id / 用时 / 总 RP / 文件数 / `go build ./...` 是否通过 / 手动应答次数
   - 协作质量观察：architect 是否主动分工、dev_1↔dev_2 是否对齐接口、tester 是否闭环验收（参照 Claude 版 VERIFIED-m5.md §成员产出）
   - 工具调用稳定性：`team_create` / `task` / `send_message` 是否按 Skills 指引给出正确参数；若有 malformed 调用，记录具体案例
   - 结论段：GLM-5.1 是否可作为 ai-rd-team 第一期支持的"等价替代模型"，以及推荐/不推荐/需限制场景
   - **验收**：报告含以上 4 类内容，对比数据来自 6.1 和 6.4 两次真实 run（不编造）；若 GLM 版未通过 `go build`，报告中明确列出根因分析（prompt 理解问题 / 工具调用格式 / 协作断裂）。
-  - **状态**：⏸️ 依赖 6.4 完成
+  - **状态**：🔀 deferred → 随 6.4 一并拆分到 `docs/follow-ups/GLM51-compat.md`。
 - [x] 6.6 提交 commit：消息含 "M5: reduce bridge burden (auto-responder + initialize 本地化 + 面板提示) + GLM-5.1 基线"，push
   - **验收**：git log 可见 M5 propose → M5 implement → M5 E2E 三次提交；CI（若已接入）绿色。
   - **说明**：6.6 的 Claude E2E 证据（M5 impl + VERIFIED-m5.md + 53 文件产物）已在当前 session 提交；GLM 版（6.4/6.5）作为后续 follow-up commit 由用户在 GLM 会话补做。
 
 ## 7. 归档
 
-- [ ] 7.1 确认所有 1-6 任务均已 `[x]`；跑 `openspec archive reduce-bridge-burden` 或等价 CLI，让 change 进入 `openspec/changes/archive/`
-  - **验收**：`openspec/changes/archive/reduce-bridge-burden/` 存在；`openspec/changes/` 下不再有活跃副本；`openspec/specs/adapter-bridge-auto-responder/spec.md` 成为正式 spec。
+- [x] 7.1 确认所有 1-6 任务均已 `[x]` 或 `[~]`（deferred）；执行 `openspec archive reduce-bridge-burden`，让 change 进入 `openspec/changes/archive/YYYY-MM-DD-reduce-bridge-burden/`
+  - **验收**：`openspec/changes/archive/<date>-reduce-bridge-burden/` 存在；`openspec/changes/` 下不再有活跃副本；`openspec/specs/adapter-bridge-auto-responder/spec.md` 成为正式 spec。
+  - **说明**：6.4/6.5 标注为 `[~]` deferred，拆分到独立 follow-up change `verify-glm51-compat`；M5 主体（减负能力 + Claude baseline）已验收通过，不阻塞归档。

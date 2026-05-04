@@ -211,12 +211,19 @@
 
 ---
 
-## 6A. M5：降低 bridge 负担（~2 天）
+## 6A. M5：降低 bridge 负担（~2 天）✅ 已完成（2026-05-04 归档）
 
 **目标**：降低 file-based bridge 在 E2E 场景下对主 Agent "在线手动应答"的依赖，把一次 Standard 档 blog-api E2E 的主 Agent 手动应答次数从 **~11** 降到 **~6**。
 
-**关联 openspec change**：`openspec/changes/reduce-bridge-burden/`（proposal + design + specs + tasks）
-**关联 capability**：`openspec/specs/adapter-bridge-auto-responder/spec.md`（归档后落地）
+**关联 openspec change**：`openspec/changes/archive/2026-05-04-reduce-bridge-burden/`（已归档）
+**关联 capability**：`openspec/specs/adapter-bridge-auto-responder/spec.md`（正式 spec）
+
+**实际结果**：
+- ✅ 手动应答从 11-12 次 → **7 次**（降幅 42%）
+- ✅ initialize 从 ~38 秒 → **7 毫秒**（本地化）
+- ✅ AutoBridgeResponder 后台线程自动应答 4 条 shutdown_request
+- ✅ pytest 425 全绿，ruff 全绿，`go build ./...` 通过
+- 🔀 GLM-5.1 基线对比拆分为独立 follow-up（参见 `docs/follow-ups/GLM51-compat.md`）——阻塞外部条件：需用户在 CodeBuddy 侧切到 GLM-5.1 会话执行。零代码变更、无 spec delta，不走 openspec change 体系。
 
 ### 6A.1 范围
 
