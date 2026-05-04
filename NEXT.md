@@ -1,7 +1,7 @@
 # NEXT — 下次工作时从这里开始
 
 > **用途**：session 交接的单一入口。下次任何人（或 AI session）继续这个项目时，**第一件事就是读这份文档**。
-> **最后更新**：2026-05-04 18:45（扩写 getting-started 文档后）
+> **最后更新**：2026-05-04 19:10（新增自定义 Skill example 04 + docs walkthrough 后）
 > **当前版本**：`0.1.0b1` beta（本地可装，**未发 PyPI**）
 > **仓库状态**：`main` 分支 clean，已同步 origin
 

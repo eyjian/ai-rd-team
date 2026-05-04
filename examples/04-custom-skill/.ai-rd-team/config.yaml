@@ -1,0 +1,18 @@
+# ai-rd-team 基础配置 — 自定义 Skill 示例
+
+config_version: "1.0"
+
+project:
+  description: "TodoList API（FastAPI + 团队自定义编码规范）"
+
+run_mode: "standard"
+
+tech_stack:
+  backend: "python-fastapi"
+  frontend: null
+  mobile: null
+
+# Standard 档合理的预算
+budget:
+  per_run: 350
+  per_day: 1500

@@ -1,0 +1,28 @@
+# Advanced 配置 — 引用两个自定义 Skill
+
+# Bridge 超时：真实 CodeBuddy 响应 task/send_message 可能 60-90 秒
+adapter:
+  bridge_timeout_seconds: 300
+
+# 混合引用 builtin Skill 和自定义 Skill
+# 自定义 Skill 文件位置：.ai-rd-team/skills/
+#   - fastapi-routers.md
+#   - team-python-style.md
+# 引用时去掉 .md 后缀；不带前缀走三层优先级（workspace > global > builtin）
+roles:
+  architect:
+    skills:
+      - "builtin:code-review-checklist"
+      - "fastapi-routers"          # 架构师也需要知道路由组织约束
+
+  developer:
+    skills:
+      - "builtin:python-best-practices"
+      - "builtin:pytest-guide"
+      - "fastapi-routers"          # ← 自定义
+      - "team-python-style"        # ← 自定义
+
+  tester:
+    skills:
+      - "builtin:pytest-guide"
+      - "team-python-style"        # 测试也遵守命名规范

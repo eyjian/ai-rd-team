@@ -9,6 +9,7 @@
 | [01-smart-bookmark](01-smart-bookmark/) | Lite | Python CLI | ~120 | 命令行书签管理工具 |
 | [02-blog-api](02-blog-api/) | Standard | Go + Kratos | ~400 | 博客系统后端 REST API |
 | [03-todo-mini](03-todo-mini/) | Standard | 微信小程序 | ~400 | TodoList 小程序 |
+| [04-custom-skill](04-custom-skill/) | Standard | FastAPI + Pydantic v2 | ~350 | **演示自定义 Skill**：团队编码规范落地 AI 产出 |
 
 ## 如何运行任意示例
 
@@ -40,10 +41,13 @@ ai-rd-team run "$(cat REQUIREMENT.md)"
 
 ## Skills 引用示例
 
-三个案例分别演示了如何在 `config.advanced.yaml` 里给不同角色配置 Skills：
+四个案例分别演示了如何在 `config.advanced.yaml` 里给不同角色配置 Skills：
 
-- **SmartBookmark**：developer 用 `python-best-practices + pytest-guide`（默认即可）
-- **BlogAPI**：architect + developer + reviewer 都加载 `go-kratos-basics`
-- **TodoMini**：developer 加载 `wxmini-basics`
+- **01 SmartBookmark**：developer 用默认 `python-best-practices + pytest-guide`
+- **02 BlogAPI**：architect + developer + reviewer 都加载 `builtin:go-kratos-basics`
+- **03 TodoMini**：developer 加载 `builtin:wxmini-basics`
+- **04 CustomSkill**：混合引用 `builtin:xxx` + **项目自定义 Skill**（`fastapi-routers` / `team-python-style`），放在 `.ai-rd-team/skills/` 下
 
-参考每个示例的 `config.advanced.yaml`。
+想把公司/项目专有编码规范落地给 AI 团队？**先看 [04-custom-skill](04-custom-skill/)**。
+
+参考每个示例的 `config.advanced.yaml`。自定义 Skill 的完整编写指南见 [docs/04-skills.md](../docs/04-skills.md#完整示例给项目加一个自定义-skill)。

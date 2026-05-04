@@ -81,22 +81,128 @@ Skills 能影响行为，但**有几个前置条件**：
 3. **禁止清单明确**：「不要 X」比「要 Y」更有效
 4. **带代码示例**：成员会模仿示例风格
 
-### 真实案例（M3 E2E）
+## 完整示例：给项目加一个自定义 Skill
 
-开发者只收到 `python-best-practices` + `pytest-guide` 两个 Skill，就主动做到了：
+下面是一个端到端 walkthrough，**抄这一段就能跑起来**。假设你在开发一个 FastAPI 项目，想约束成员统一用 `APIRouter` 分组路由。
 
-- 识别 `isinstance(True, int) == True` 的 Python 陷阱并加专项测试
-- 加 `TypeError` 检查非 int 输入（超出最小契约）
-- 函数名用 `test_<对象>_<场景>_<期望>` 命名法
-- 加入递推关系交叉验证 `fib(50) == fib(49) + fib(48)`
+### 第 1 步：创建 Skill 文件
 
-因为 `python-best-practices` 写了：
-> - ❌ 用 `is` 比较字符串（应用 `==`）
-> - ❌ 把 mutable default arg
+在**工作区** `<workspace>/.ai-rd-team/skills/` 下建 `fastapi-routers.md`：
 
-而 `pytest-guide` 写了：
-> - `@pytest.mark.parametrize` 覆盖多用例
-> - 函数命名 `test_<对象>_<场景>_<期望>`
+```markdown
+# fastapi-routers
+
+## 适用场景
+
+所有 FastAPI 项目的路由组织。
+
+## 核心原则
+
+1. 每个业务模块独立 `APIRouter`，不把路由直接挂到 `FastAPI` 实例上
+2. Router 文件放在 `app/routers/<domain>.py`，由 `app/main.py` 统一 `include_router`
+3. 路由函数签名必须声明返回类型（Pydantic model 或 `dict[str, Any]`）
+
+## 常用模式
+
+**推荐**：
+
+\`\`\`python
+# app/routers/users.py
+from fastapi import APIRouter, status
+from app.schemas.user import UserOut
+
+router = APIRouter(prefix="/users", tags=["users"])
+
+@router.get("/{user_id}", response_model=UserOut, status_code=status.HTTP_200_OK)
+async def get_user(user_id: int) -> UserOut:
+    ...
+\`\`\`
+
+**`main.py` 统一注册**：
+
+\`\`\`python
+from fastapi import FastAPI
+from app.routers import users, orders
+
+app = FastAPI()
+app.include_router(users.router)
+app.include_router(orders.router)
+\`\`\`
+
+## 禁止
+
+- ❌ 在 `main.py` 里直接写 `@app.get("/users/{id}")`
+- ❌ 一个 router 文件塞多个业务域（users + orders 混在一起）
+- ❌ 省略 `response_model` 直接返回 dict（前端无法生成类型）
+
+## 参考
+
+- https://fastapi.tiangolo.com/tutorial/bigger-applications/
+```
+
+> 💡 写 Skill 的黄金法则：**正面模式 + 反面禁止**。只说"要 X"没用，必须配 "不要 Y"。
+
+### 第 2 步：在 config.advanced.yaml 引用
+
+```yaml
+# <workspace>/.ai-rd-team/config.advanced.yaml
+
+adapter:
+  bridge_timeout_seconds: 300
+
+roles:
+  developer:
+    skills:
+      - "builtin:python-best-practices"    # 继续用 builtin
+      - "builtin:pytest-guide"
+      - "fastapi-routers"                  # ← 新加的自定义 Skill
+
+  reviewer:
+    skills:
+      - "builtin:code-review-checklist"
+      - "fastapi-routers"                  # ← reviewer 也用同一份规范
+```
+
+`fastapi-routers` 没有 `builtin:` 前缀，会走三层优先级：先查 workspace → global → builtin。这里因为只有 workspace 有，就用 workspace 那份。
+
+### 第 3 步：启动 run 并验证 Skill 真被加载
+
+```bash
+# 启动后在 runtime/adapter-intents/ 里就能看到给成员的 Prompt
+ai-rd-team run "实现 /users 和 /orders 两个 CRUD 端点"
+
+# 另开一个终端
+cat .ai-rd-team/runtime/adapter-intents/*.json \
+  | python3 -c "import sys, json; print(json.load(sys.stdin).get('prompt', ''))" \
+  | sed -n '/# Skills/,/# 记忆/p'
+```
+
+应看到 Prompt 的 `# Skills` 段里有你写的 `fastapi-routers` 内容。如果**没看到**：
+
+| 问题 | 检查 |
+|------|------|
+| Skill 文件名和引用不一致 | 文件 `fastapi-routers.md`，引用就是 `"fastapi-routers"`（去 `.md`） |
+| 配置写错级别 | `roles.developer.skills` 是数组；不是 `roles.skills.developer` |
+| 文件没被 workspace 发现 | 必须在 `.ai-rd-team/skills/` 目录下（注意前面的点号） |
+| 没重启 | 配置改动不热加载，需要重启 `ai-rd-team run` |
+
+### 第 4 步：观察成员的行为
+
+成员完成后，检查产出：
+
+- ✅ `app/routers/users.py` 存在且有 `APIRouter(prefix="/users", tags=["users"])`
+- ✅ `app/main.py` 用了 `app.include_router(...)`，没有直接 `@app.get`
+- ✅ 所有路由函数都声明了 `response_model`
+
+如果 Skill 写得够具体，**这些细节成员会自觉遵守**。如果 Skill 写得空洞（比如只写"用 APIRouter"没写示例和禁止），成员可能忽略。
+
+---
+
+## 真实能跑的示例
+
+看 [examples/04-custom-skill/](../examples/04-custom-skill/)：Standard 档 + FastAPI + 2 份自定义 Skill（`fastapi-routers` + `team-python-style`），成员 spawn 后可以观察到自定义规则被遵守。
+
+---
 
 ## Token 预算
 
