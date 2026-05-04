@@ -858,9 +858,11 @@ class MemberLifecycleManager:
 │   ├── deployment/
 │   └── reports/
 ├── commands/                     # 用户对 Team 的操作指令
-│   └── pending/
+│   ├── pending/                  # 待处理
+│   └── processed/                # 已处理（归档）
 ├── cost/
 │   ├── resource-points.yaml      # 实时累计
+│   ├── model-history.jsonl       # 模型切换历史
 │   └── post-run.jsonl            # 事后记录
 ├── logs/
 │   ├── engine.log
@@ -868,8 +870,10 @@ class MemberLifecycleManager:
 ├── adapter-intents/              # Bridge 意图文件
 ├── adapter-results/              # Bridge 结果文件
 └── archive/
-    └── run-{uuid}/               # 已完成运行的归档
+    └── run-{run_id}/             # 已完成运行的归档（run_id 由 current-run.yaml 定义）
 ```
+
+> **权威文档**：runtime/ 目录下所有文件的**具体 Schema** 见 `11-runtime-protocol.md`。本节仅展示总体结构。
 
 ### 6.3 实现
 

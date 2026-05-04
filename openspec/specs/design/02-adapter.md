@@ -33,12 +33,16 @@
 
 BaseAdapter 接口定义要**彻底平台无关**：
 - 方法名、参数、返回值不带 CodeBuddy 特有概念
-- 不暴露 `team_create`、`task`、`send_message` 等工具名
-- 用 ai-rd-team 自己的语义表达
+- 不暴露 CodeBuddy 的具体工具名（`team_create`、`task`、`todo_write` 等）
+- 用 ai-rd-team 自己的业务语义表达
 
 例：
-- ❌ 错：`def create_team(name): ...`（CodeBuddy 专有）
-- ✅ 对：`def create_team_environment(name) -> TeamHandle: ...`
+- ❌ 错：`def call_team_create_tool(args): ...`（直接暴露 CodeBuddy 工具名）
+- ❌ 错：`def task_async(name, team_name): ...`（泄漏 CodeBuddy 参数风格）
+- ✅ 对：`def create_team(team_id, description) -> TeamHandle: ...`（通用业务语义）
+- ✅ 对：`def spawn_member(spec) -> MemberHandle: ...`
+
+**命名原则**：动词 + 业务对象，不提平台实现细节。CodeBuddy 工具只在 `CodeBuddyAdapter` 实现内部调用，不向外泄漏。
 
 ### 2.2 能力声明与降级
 

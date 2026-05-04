@@ -1310,7 +1310,7 @@ class EffectiveConfig:
 ### 8.2 访问模式
 
 ```python
-config = ConfigLoader().load(workspace=Path.cwd())
+config = ConfigLoader(workspace_dir=Path.cwd() / ".ai-rd-team").load()
 
 # 只读访问
 config.project.name
