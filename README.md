@@ -19,7 +19,9 @@
 - ✅ **M1 真实 CodeBuddy 端到端验证通过**（`prototype/M1-real-e2e/REPORT.md`）
 - ✅ M2 代码实现（326 测试，85% 覆盖率，Skills/Memory/Cost/Hook/Security/Preset）
 - ✅ **M2 真实 CodeBuddy 端到端验证通过**（`prototype/M2-real-e2e/REPORT.md`）
-- 🚧 M3 准备中（Web 面板）
+- ✅ M3 Web 面板（389 测试，T3.1-T3.8 全部完成）
+- ✅ **M3 真实 CodeBuddy 端到端验证通过**（`prototype/M3-real-e2e/REPORT.md`）
+- 🚧 M4 准备中（打磨发布）
 
 ---
 

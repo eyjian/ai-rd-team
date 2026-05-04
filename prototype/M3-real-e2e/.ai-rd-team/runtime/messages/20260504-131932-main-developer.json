@@ -1,0 +1,8 @@
+{
+  "ts": "2026-05-04T05:19:32.196+00:00",
+  "from": "main",
+  "to": "developer",
+  "type": "message",
+  "content": "项目启动。\n\n**需求**：\nM3 E2E：实现斐波那契并验证面板实时刷新\n\n**团队**：\n- developer（developer）\n\n**档位**：lite\n\n请按你的角色职责开始工作。需要协作时直接用 send_message 联系队友。",
+  "summary": "启动任务"
+}

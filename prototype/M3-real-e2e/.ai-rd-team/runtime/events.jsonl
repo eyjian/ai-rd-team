@@ -1,0 +1,5 @@
+{"ts": "2026-05-04T05:17:46.221+00:00", "event": "run_starting", "run_id": "f36b5279", "mode": "lite"}
+{"ts": "2026-05-04T05:18:58.271+00:00", "event": "member_spawned", "run_id": "f36b5279", "member_id": "developer", "role": "developer"}
+{"ts": "2026-05-04T05:19:32.198+00:00", "event": "run_started", "run_id": "f36b5279", "team_id": "ai-rd-team-f36b5279", "member_count": 1}
+{"ts": "2026-05-04T05:20:17.206+00:00", "event": "run_stopping", "run_id": "f36b5279", "reason": "m3-e2e-done"}
+{"ts": "2026-05-04T05:21:21.756+00:00", "event": "run_stopped", "run_id": "f36b5279", "reason": "m3-e2e-done"}

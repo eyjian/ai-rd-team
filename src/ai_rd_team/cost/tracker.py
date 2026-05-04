@@ -488,6 +488,43 @@ class CostTracker:
         }
         return mapping[mode]
 
+    def raise_rp_budget(self, new_value: int) -> int:
+        """提高当前 run 所属档位的 RP 硬限（T3.8b smart_pause 的 raise_budget 动作）。
+
+        - 通过 dataclasses.replace 重建 Budget / CostControl（避免 frozen 限制）
+        - 同步更新 snapshot.rp_budget + rp_usage_ratio
+        - 重置 smart_pause 的一次性标志，让新预算下重新告警
+        - 返回实际生效的新值
+
+        Args:
+            new_value: 新的 max_resource_points，必须大于当前值
+        """
+        import dataclasses
+
+        snap = self.require_snapshot()
+        if new_value <= snap.rp_budget:
+            raise ValueError(
+                f"new rp budget ({new_value}) must be greater than current ({snap.rp_budget})"
+            )
+
+        # 重建对应 mode 的 Budget 对象
+        field_name = f"budget_{snap.mode}"
+        old_budget = getattr(self.config, field_name)
+        new_budget = dataclasses.replace(old_budget, max_resource_points=new_value)
+        self.config = dataclasses.replace(self.config, **{field_name: new_budget})
+
+        # 更新 snapshot
+        snap.rp_budget = new_value
+        if new_value > 0:
+            snap.rp_usage_ratio = snap.resource_points / new_value
+
+        # 重置一次性告警标志（让新预算下重新评估 WARN 阈值）
+        self._warned_threshold = False
+        self._fallback_suggested = False
+
+        self._snapshot_touch()
+        return new_value
+
     def _add_rp(self, delta: int) -> None:
         snap = self.require_snapshot()
         snap.resource_points += max(0, delta)

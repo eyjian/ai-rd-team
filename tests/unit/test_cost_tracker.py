@@ -335,3 +335,67 @@ class TestQuotaTracker:
         # 不崩溃就算通过；具体数字因 "now" 无法解析会被跳过
         used = q.day_used()
         assert used >= 0
+
+
+class TestRaiseRpBudget:
+    """T3.8b 配套：CostTracker.raise_rp_budget 行为。"""
+
+    def _make_tracker(self, tmp_path: Path) -> CostTracker:
+        cfg = _make_config(rp_lite=120)
+        return CostTracker(config=cfg, cost_dir=tmp_path / "cost")
+
+    def test_raise_updates_snapshot_and_config(self, tmp_path: Path) -> None:
+        tracker = self._make_tracker(tmp_path)
+        tracker.start_run(run_id="r1", mode="lite")
+        snap_before = tracker.snapshot()
+        assert snap_before.rp_budget == 120
+
+        new_value = tracker.raise_rp_budget(300)
+
+        assert new_value == 300
+        snap_after = tracker.snapshot()
+        assert snap_after.rp_budget == 300
+        # config 也已同步
+        assert tracker.config.budget_lite.max_resource_points == 300
+
+    def test_raise_recomputes_usage_ratio(self, tmp_path: Path) -> None:
+        tracker = self._make_tracker(tmp_path)
+        tracker.start_run(run_id="r1", mode="lite")
+        tracker.record_spawn(count=2)  # 80 RP，120 预算下 ratio=0.667
+
+        tracker.raise_rp_budget(800)
+        snap = tracker.snapshot()
+        # 80 / 800 = 0.1
+        assert abs(snap.rp_usage_ratio - 0.1) < 1e-6
+
+    def test_raise_rejects_non_increase(self, tmp_path: Path) -> None:
+        tracker = self._make_tracker(tmp_path)
+        tracker.start_run(run_id="r1", mode="lite")
+
+        with pytest.raises(ValueError, match="greater than current"):
+            tracker.raise_rp_budget(120)
+        with pytest.raises(ValueError, match="greater than current"):
+            tracker.raise_rp_budget(50)
+
+    def test_raise_resets_warned_threshold(self, tmp_path: Path) -> None:
+        """提升预算后，WARN 阈值告警可重新触发。"""
+        tracker = self._make_tracker(tmp_path)
+        tracker.start_run(run_id="r1", mode="lite")
+        # 跑到 96 RP（120 * 0.8 > 0.75 阈值）
+        tracker.record_spawn(count=2)  # 80
+        tracker.record_message(from_="a", to="b")  # 82
+        # 耗到阈值
+        for _ in range(10):
+            tracker.record_message(from_="a", to="b")  # 82 + 20 = 102
+        r1 = tracker.check_budget()
+        # 要么 SMART_PAUSE (>= 120)，要么 WARN
+        # 只要 warned_threshold 被设过，再次调就不会再 WARN
+        tracker.check_budget()
+
+        # 提升预算后，重新评估
+        tracker.raise_rp_budget(1000)
+        assert tracker._warned_threshold is False
+        assert tracker._fallback_suggested is False
+
+        # 至少能证明状态被重置（原本会导致不再返回 WARN）
+        assert r1 is not None  # sanity

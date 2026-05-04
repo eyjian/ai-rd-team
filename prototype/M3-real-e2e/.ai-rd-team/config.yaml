@@ -1,0 +1,20 @@
+# ai-rd-team 基础配置（首次引导自动生成，可手动编辑）
+# 高级配置用 `ai-rd-team config advanced` 生成 config.advanced.yaml
+
+config_version: "1.0"
+
+project:
+  description: "M3 E2E：验证 Web 引导与面板"
+
+run_mode: "lite"     # lite / standard / full
+
+# 技术栈（留空表示让架构师自主选择；架构师会参考现有代码）
+tech_stack:
+  backend: null
+  frontend: null
+  mobile: null
+
+# 预算（Resource Points）
+budget:
+  per_run: 150
+  per_day: 500
