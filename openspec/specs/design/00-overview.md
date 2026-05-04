@@ -13,18 +13,18 @@
 
 | # | 文档 | 颗粒度 | 状态 |
 |---|------|-------|------|
-| 00 | [overview](./00-overview.md) | 架构级 | ⚡ 当前 |
-| 10 | [config-schema](./10-config-schema.md) | 实现级 | ⏳ 待写 |
-| 05 | [roles-skills](./05-roles-skills.md) | 中等详细 | ⏳ 待写 |
-| 02 | [adapter](./02-adapter.md) | **实现级**（核心） | ⏳ 待写 |
-| 01 | [engine](./01-engine.md) | **实现级**（核心） | ⏳ 待写 |
-| 07 | [artifacts](./07-artifacts.md) | 中等详细 | ⏳ 待写 |
-| 06 | [memory-system](./06-memory-system.md) | 中等详细 | ⏳ 待写 |
-| 08 | [cost-control](./08-cost-control.md) | 中等详细 | ⏳ 待写 |
-| 11 | [runtime-protocol](./11-runtime-protocol.md) | **实现级**（核心） | ⏳ 待写 |
-| 03 | [service-api](./03-service-api.md) | 架构级 | ⏳ 待写 |
-| 04 | [web-panel](./04-web-panel.md) | 架构级 | ⏳ 待写 |
-| 09 | [hooks-security](./09-hooks-security.md) | 架构级 | ⏳ 待写 |
+| 00 | [overview](./00-overview.md) | 架构级 | ✅ |
+| 10 | [config-schema](./10-config-schema.md) | 实现级 | ✅ |
+| 05 | [roles-skills](./05-roles-skills.md) | 中等详细 | ✅ |
+| 02 | [adapter](./02-adapter.md) | **实现级**（核心） | ✅ |
+| 01 | [engine](./01-engine.md) | **实现级**（核心） | ✅ |
+| 07 | [artifacts](./07-artifacts.md) | 中等详细 | ✅ |
+| 06 | [memory-system](./06-memory-system.md) | 中等详细 | ✅ |
+| 08 | [cost-control](./08-cost-control.md) | 中等详细 | ✅ |
+| 11 | [runtime-protocol](./11-runtime-protocol.md) | **实现级**（核心） | ✅ |
+| 03 | [service-api](./03-service-api.md) | 架构级 | ✅ |
+| 04 | [web-panel](./04-web-panel.md) | 架构级 | ✅ |
+| 09 | [hooks-security](./09-hooks-security.md) | 架构级 | ✅ |
 
 ---
 
