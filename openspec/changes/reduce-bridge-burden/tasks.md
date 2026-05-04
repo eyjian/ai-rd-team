@@ -1,0 +1,88 @@
+# Tasks: reduce-bridge-burden
+
+> 总预算：~2 天（16 小时）。每项 ≤4 小时，含实现 + 测试 + 文档。
+> 实现顺序：先 F 优化（风险最低，立刻见效），再 D daemon（核心），最后 Web UX（锦上添花）。
+
+## 1. F 优化：CodeBuddyAdapter `_version` / `_probe` 本地化
+
+- [ ] 1.1 在 `src/ai_rd_team/adapter/codebuddy.py` 顶部新增常量 `DEFAULT_CODEBUDDY_VERSION = "claude-opus-4.x"` 与 `DEFAULT_AVAILABLE_TOOLS = {"team_create", "team_delete", "task", "send_message"}`
+  - **验收**：常量定义存在；`REQUIRED_TOOLS` 保持现有语义；lint 通过。
+- [ ] 1.2 改写 `CodeBuddyAdapter.initialize()`：移除 `bridge.query_version_string()` 与 `bridge.probe_available_tools()` 调用，改为读 `self._config.get("version_override")` / `self._config.get("available_tools_override")`，缺失时用默认常量
+  - **验收**：函数内不再出现 `self._bridge.query_version_string` 或 `self._bridge.probe_available_tools`；缺工具仍抛 `AdapterInitError`；现有 `CodeBuddyAdapter` 构造签名不变。
+- [ ] 1.3 新增单测 `tests/adapter/test_codebuddy_adapter.py::test_initialize_does_not_call_bridge`，使用 `unittest.mock.Mock(spec=CodeBuddyToolBridge)` 验证初始化阶段 bridge 的两个 query 方法 `call_count == 0`
+  - **验收**：新测用例通过；现有 adapter 测试保持通过；覆盖率不下降。
+- [ ] 1.4 新增单测 `test_initialize_respects_overrides`：设 `config.adapter = {"version_override": "x", "available_tools_override": [...]}`，断言 `adapter.version_info.version == "x"` 且 capabilities 含覆盖工具
+  - **验收**：测试通过。
+- [ ] 1.5 新增单测 `test_initialize_rejects_missing_required_tool`：`available_tools_override` 去掉 `team_delete`，断言抛 `AdapterInitError` 且 message 含 `"team_delete"`
+  - **验收**：测试通过。
+- [ ] 1.6 更新 `openspec/specs/design/02-adapter.md` §5.2 末尾追加 §5.6 "本地化初始化（M5 新增）" 说明本次行为变更与 override 字段
+  - **验收**：文档文字新增，原 §5.2 内容不删（兼容语义）。
+
+## 2. D Daemon：AutoBridgeResponder 实现
+
+- [ ] 2.1 新文件 `src/ai_rd_team/adapter/auto_responder.py`，定义 `AutoResponderDecision` dataclass（`handled: bool`, `data: dict | None`, `log_level: str | None`）与决策表 `_decide(intent: dict) -> AutoResponderDecision`
+  - **验收**：对 design.md D2 决策表的 7 种情况（`_version` / `_probe` / shutdown_request / shutdown_response / broadcast / message / task / 未知 op）返回预期结果；独立可被纯函数测试。
+- [ ] 2.2 在同文件实现 `AutoBridgeResponder` 类：`__init__(runtime_dir, poll_interval=0.3, events_logger=None)`、`start()`、`stop(timeout=2.0)`、`stats` 只读属性；线程循环逻辑遵循 design.md 伪代码
+  - **验收**：`start()` 后 `_thread.is_alive() == True`；`stop()` 后在 `timeout` 内 `_thread.is_alive() == False`；多次 `start`/`stop` 幂等。
+- [ ] 2.3 实现"跳过已有 result 文件"的竞态保护：每次处理 intent 前先检查 `result_path.exists()`，存在则跳过并不写事件
+  - **验收**：单测 `test_skips_intent_with_existing_result` 先手写一份 result，再启动 responder，验证 result 文件内容未被覆盖。
+- [ ] 2.4 集成 `EventsLogger`（如无则使用 `logging` fallback），每次 handled 写 `bridge_auto_responded` 事件到 `runtime/events.jsonl`
+  - **验收**：单测 `test_writes_event_on_auto_respond` 断言 events.jsonl 有对应行，字段齐全（ts/event/intent_id/op/decision）。
+- [ ] 2.5 新测 `tests/adapter/test_auto_responder.py`：用 `tmp_path` + 真线程 + 手写 intent 文件，覆盖 5 类决策场景 + 停止幂等 + 竞态跳过
+  - **验收**：测试文件 ≥ 8 个用例，全部通过；总测试数增加 ≥ 8。
+
+## 3. 引擎集成：启停管理
+
+- [ ] 3.1 在 `src/ai_rd_team/engine/manager.py::TeamEnvironmentManager.initialize()` 构造 adapter 后，若 `isinstance(adapter, CodeBuddyAdapter)` 且 `config.adapter.get("auto_bridge", True)`，创建 `AutoBridgeResponder(runtime_dir=..., events_logger=self._events)` 并 `start()`，保存到 `self._auto_responder`
+  - **验收**：默认配置下 `self._auto_responder` 非 None；`auto_bridge=false` 或 adapter 非 CodeBuddy 时为 None。
+- [ ] 3.2 在 `stop_run()` 末尾（adapter.team_delete 已应答、cost summary 已写之后）调用 `self._auto_responder.stop(timeout=2.0)`，并置 None
+  - **验收**：正常结束流程后 `self._auto_responder is None`；Stop 过程不抛异常；日志可见 "auto responder stopped"。
+- [ ] 3.3 新增单测 `tests/engine/test_manager_auto_responder.py`：用 fake adapter（非 CodeBuddyAdapter）验证不创建；用真 CodeBuddyAdapter + BridgeSimulator 组合 + auto_bridge 开关验证创建/不创建
+  - **验收**：至少 3 个用例覆盖（默认启、显式关、非 CodeBuddy adapter）。
+- [ ] 3.4 跑一次完整 pytest，确保原有 393 + 新增测试全部通过
+  - **验收**：`pytest -q` exit=0；新通过用例 ≥ 11（1.x 的 3 个 + 2.5 的 8 个 + 3.3 的 3 个）；覆盖率不下降。
+
+## 4. Web 面板：Pending bridge intents
+
+- [ ] 4.1 在 `src/ai_rd_team/service/readers.py` 新增 `GET /api/bridge/pending-intents` 端点：扫 `runtime/adapter-intents/*.json`，对每个 intent 检查对应 result 文件是否存在，不存在则纳入返回；每条输出 `_id` / `op` / `age_seconds` / `hint`（由 op 预置）
+  - **验收**：端点可被 pytest httpx client 调用，返回类型 `list[dict]`；无 intent 目录时返回 `[]`（不抛异常）。
+- [ ] 4.2 将 hint 文案按 op 字典化（team_create / task / send_message type=message / team_delete / 其它）
+  - **验收**：`test_pending_intents_hint_content` 对 4 种 op 断言 hint 含关键字。
+- [ ] 4.3 新增契约测试 `tests/service/test_readers_bridge_pending.py`，覆盖空、纯已应答、含 pending 三种情况
+  - **验收**：3 个用例通过。
+- [ ] 4.4 在 `src/ai_rd_team/service/web/index.html` 总览页加 "Pending bridge intents" 卡片：空时显示"✅ 无需干预"；非空列出每条 hint + age；每 5 秒轮询一次 `/api/bridge/pending-intents`
+  - **验收**：手动启动 Web 面板无 intent 时见空态；手写一个 `task` intent 文件后 5 秒内卡片刷新显示。
+- [ ] 4.5 更新 `openspec/specs/design/04-web-panel.md` 总览页章节，描述新卡片
+  - **验收**：文档新增段落。
+
+## 5. 配置 / 文档 / Changelog
+
+- [ ] 5.1 在 `openspec/specs/design/10-config-schema.md` 的 adapter 配置节追加 `auto_bridge` / `version_override` / `available_tools_override` 三个字段说明
+  - **验收**：文档新增表格行或 YAML 示例。
+- [ ] 5.2 更新 `openspec/specs/design/11-runtime-protocol.md` §8.3 事件清单，加 `bridge_auto_responded` 条目
+  - **验收**：事件清单含新事件，字段说明齐全。
+- [ ] 5.3 更新 `openspec/specs/design/ROADMAP.md`，新增 "M5" 节与本次 change 对应任务
+  - **验收**：ROADMAP 含 M5 标题、目标、本 change 链接。
+- [ ] 5.4 更新 `CHANGELOG.md` 的 `[Unreleased]` 节：
+  - Added: AutoBridgeResponder；`adapter.auto_bridge` 开关；`/api/bridge/pending-intents` 端点；Web 总览页卡片
+  - Changed: `CodeBuddyAdapter.initialize()` 不再走 file bridge
+  - Migration: 旧配置无需改动；遇兼容问题设 `adapter.auto_bridge: false`
+  - **验收**：CHANGELOG 含 4 类变更，文案符合 Keep a Changelog 风格。
+- [ ] 5.5 在 `docs/` 下新增或更新一篇 `06-bridge-and-auto-responder.md`，一页说明"M5 后主 Agent 需要应答哪几类 intent"
+  - **验收**：文档含"手动应答清单 = {team_create, task, send_message type=message, team_delete}" + 配置回退说明。
+
+## 6. 真实 E2E 验证
+
+- [ ] 6.1 清空 `prototype/M4-example2-e2e/`（保留 REQUIREMENT.md / driver.py），以 M5 代码跑一次 Standard 档 blog-api E2E，记录"主 Agent 手动应答次数"
+  - **验收**：实际手动应答次数 ≤ 6（预期 5-6）；driver.log 完整；产物可再次 `go build ./...` 通过。
+- [ ] 6.2 产出 `prototype/M4-example2-e2e/VERIFIED-m5.md`，含：手动应答次数对比表（v1=11 / v2=11 / M5=?）、auto-responder 统计（`stats.responded_count` by op）、Web 面板卡片截图或描述、go build 验证
+  - **验收**：报告含上述 4 类内容，数据真实。
+- [ ] 6.3 独立运行 `pytest -q`、`ruff check .`、`ruff format --check .`（针对 src + tests，prototype 可豁免）
+  - **验收**：全部退出码 0；若 ruff 对 prototype 报错，用 `# ruff: noqa` 或 `--exclude prototype` 定向豁免但不掩盖 src/tests 问题。
+- [ ] 6.4 提交 commit：消息含 "M5: reduce bridge burden (auto-responder + initialize 本地化 + 面板提示)"，push
+  - **验收**：git log 可见；CI（若已接入）绿色。
+
+## 7. 归档
+
+- [ ] 7.1 确认所有 1-6 任务均已 `[x]`；跑 `openspec archive reduce-bridge-burden` 或等价 CLI，让 change 进入 `openspec/changes/archive/`
+  - **验收**：`openspec/changes/archive/reduce-bridge-burden/` 存在；`openspec/changes/` 下不再有活跃副本；`openspec/specs/adapter-bridge-auto-responder/spec.md` 成为正式 spec。
