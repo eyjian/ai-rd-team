@@ -167,6 +167,122 @@ class TestEngineLifecycle:
 
         assert ctx.mode == "standard"
 
+    # ------------------------------------------------------------
+    # 回归测试：M1 真实 E2E 发现的 3 个小问题（F1/F2/F3）
+    # ------------------------------------------------------------
+
+    def test_f1_timestamps_are_utc_with_timezone(self, tmp_workspace: Path) -> None:
+        """F1：runtime 产出的时间戳必须带时区信息（非 naive datetime）。"""
+        import json
+
+        _write_basic_config(tmp_workspace, mode="lite")
+        engine = TeamEnvironmentManager(workspace=tmp_workspace, bridge=InMemoryBridge())
+        engine.initialize(allow_onboarding=False, interactive=False)
+        engine.start_run("test")
+
+        runtime = tmp_workspace / ".ai-rd-team" / "runtime"
+
+        # current-run.yaml: started_at 必须带 +00:00 或 Z
+        current = yaml.safe_load((runtime / "current-run.yaml").read_text(encoding="utf-8"))
+        assert "+00:00" in current["started_at"] or current["started_at"].endswith("Z"), (
+            f"started_at should have timezone info, got {current['started_at']!r}"
+        )
+
+        # team.yaml: last_updated 必须带时区
+        team = yaml.safe_load((runtime / "state" / "team.yaml").read_text(encoding="utf-8"))
+        assert "+00:00" in team["last_updated"] or team["last_updated"].endswith("Z")
+
+        # events.jsonl 的 ts 字段必须带时区
+        events = [json.loads(line) for line in (runtime / "events.jsonl").read_text().splitlines()]
+        assert events, "events.jsonl should be non-empty"
+        for evt in events:
+            assert "+00:00" in evt["ts"] or evt["ts"].endswith("Z"), (
+                f"event ts should have timezone info, got {evt['ts']!r}"
+            )
+
+    def test_f2_team_id_preserved_after_stop_run(self, tmp_workspace: Path) -> None:
+        """F2：stop_run 后 team.yaml 仍应保留 team_id（不能因 write_team_state 默认参数丢失）。"""
+        _write_basic_config(tmp_workspace, mode="lite")
+        engine = TeamEnvironmentManager(workspace=tmp_workspace, bridge=InMemoryBridge())
+        engine.initialize(allow_onboarding=False, interactive=False)
+        ctx = engine.start_run("test")
+        expected_team_id = ctx.team_handle.team_id
+        assert expected_team_id  # sanity
+
+        engine.stop_run(reason="done")
+
+        team_yaml = yaml.safe_load(
+            (tmp_workspace / ".ai-rd-team" / "runtime" / "state" / "team.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        assert team_yaml["status"] == "shut_down"
+        assert team_yaml["team_id"] == expected_team_id, (
+            f"team_id lost after stop_run; expected {expected_team_id!r}, "
+            f"got {team_yaml['team_id']!r}"
+        )
+
+    def test_f3_member_states_finalized_on_stop(self, tmp_workspace: Path) -> None:
+        """F3：stop_run 后所有成员 state 必须处于终态（非 spawning/working/idle）。"""
+        _write_basic_config(tmp_workspace, mode="standard")
+        engine = TeamEnvironmentManager(workspace=tmp_workspace, bridge=InMemoryBridge())
+        engine.initialize(allow_onboarding=False, interactive=False)
+        engine.start_run("test")
+        engine.stop_run(reason="done")
+
+        members_dir = tmp_workspace / ".ai-rd-team" / "runtime" / "state" / "members"
+        terminal = {"done", "failed", "terminated"}
+        for yaml_file in members_dir.glob("*.yaml"):
+            data = yaml.safe_load(yaml_file.read_text(encoding="utf-8"))
+            assert data["status"] in terminal, (
+                f"{yaml_file.name}: status {data['status']!r} not in {terminal}"
+            )
+
+    def test_f3_respects_member_self_reported_done(self, tmp_workspace: Path) -> None:
+        """F3：成员已把自己 state 写成 done 时，Engine 不应覆盖为 terminated。"""
+        _write_basic_config(tmp_workspace, mode="lite")
+        engine = TeamEnvironmentManager(workspace=tmp_workspace, bridge=InMemoryBridge())
+        engine.initialize(allow_onboarding=False, interactive=False)
+        engine.start_run("test")
+
+        # 模拟成员主动把 state 更新为 done
+        assert engine._runtime_state is not None
+        engine._runtime_state.write_member_state(
+            instance_name="developer",
+            role="developer",
+            status="done",
+            progress="100%",
+            produced_files=["hello.py"],
+        )
+
+        engine.stop_run(reason="done")
+
+        state_file = (
+            tmp_workspace / ".ai-rd-team" / "runtime" / "state" / "members" / "developer.yaml"
+        )
+        data = yaml.safe_load(state_file.read_text(encoding="utf-8"))
+        assert data["status"] == "done", "done 状态应被保留，不能被兜底逻辑覆盖为 terminated"
+        assert "hello.py" in data["produced_files"]
+
+    def test_f3_shutdown_message_contains_state_hint(self, tmp_workspace: Path) -> None:
+        """F3：shutdown 消息应包含'请更新 state=done'引导。"""
+        _write_basic_config(tmp_workspace, mode="lite")
+        bridge = InMemoryBridge()
+        engine = TeamEnvironmentManager(workspace=tmp_workspace, bridge=bridge)
+        engine.initialize(allow_onboarding=False, interactive=False)
+        engine.start_run("test")
+        engine.stop_run(reason="done")
+
+        shutdown_calls = [
+            c
+            for c in bridge.calls
+            if c["op"] == "send_message" and c.get("type") == "shutdown_request"
+        ]
+        assert shutdown_calls
+        content = shutdown_calls[0].get("content", "")
+        assert "state" in content.lower() or "状态" in content
+        assert "done" in content.lower()
+
 
 class TestCli:
     """CLI 端到端烟测。"""

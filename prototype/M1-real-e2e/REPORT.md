@@ -292,3 +292,23 @@ prototype/M1-real-e2e/
 1. 修复 §5 列出的小问题
 2. 进入 M2：Skills / Memory / Hook / 完整 7 角色 / 成本控制
 3. 或先发布 0.1.0-alpha 让早期用户试玩
+
+---
+
+## 附录：§5 3 个小问题的修复状态（2026-05-04 更新）
+
+| 问题 | 修复位置 | 状态 |
+|------|---------|------|
+| F1：时间戳没有时区信息，微秒精度噪音 | `runtime/state.py` 新增 `utc_now_iso()`，所有 current-run / team / members / roster / events / messages 的 `ts`/`last_updated`/`started_at` 字段统一用 UTC+毫秒 | ✅ 已修复 |
+| F2：stop_run 后 team.yaml 的 team_id 字段丢失 | `engine/manager.py::stop_run` 从 `ctx.team_handle.team_id` 取出并传入 `write_team_state(status="shut_down", team_id=team_id)` | ✅ 已修复 |
+| F3：成员完成后未更新 state=done | ① shutdown 消息内容加入"请更新 state=done 再退出"的明确引导；② Engine 在 `stop_run` 增加 `_finalize_member_states`，把所有未到终态（done/failed/terminated）的成员 state 兜底为 `terminated` | ✅ 已修复 |
+
+新增回归测试：
+- `test_f1_timestamps_are_utc_with_timezone`
+- `test_f2_team_id_preserved_after_stop_run`
+- `test_f3_member_states_finalized_on_stop`
+- `test_f3_respects_member_self_reported_done`（成员自报 done 不被覆盖）
+- `test_f3_shutdown_message_contains_state_hint`
+- `TestUtcNowIso`（3 个小单测：时区/精度/可解析）
+
+回归结果：**189/189 测试全过，整体覆盖率 84%**。

@@ -17,13 +17,28 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from ai_rd_team.utils.file_ops import atomic_write, locked_append
+
+
+def utc_now_iso() -> str:
+    """返回带时区（UTC）+ 毫秒精度的 ISO 8601 时间戳。
+
+    形如：``2026-05-04T03:12:45.678+00:00``
+
+    为什么不用 ``datetime.now().isoformat()``：
+    - 默认产生 naive datetime，无时区信息（分布式/跨时区分析时有歧义）
+    - 默认微秒精度造成可读性差；毫秒精度对人类阅读更友好
+    """
+    now = datetime.now(timezone.utc)
+    # 把微秒截断成毫秒（3 位）
+    return now.isoformat(timespec="milliseconds")
+
 
 # runtime/ 下的所有子目录
 _RUNTIME_SUBDIRS = [
@@ -85,7 +100,7 @@ class RuntimeStateManager:
         """写 current-run.yaml（原子写）。"""
         data = {
             "run_id": run_id,
-            "started_at": datetime.now().isoformat(),
+            "started_at": utc_now_iso(),
             "requirement": requirement,
             "mode": mode,
             "status": "running",
@@ -111,7 +126,7 @@ class RuntimeStateManager:
         """更新 current-run.yaml 的 status 字段。"""
         data = self.read_run_metadata() or {}
         data["status"] = status
-        data["updated_at"] = datetime.now().isoformat()
+        data["updated_at"] = utc_now_iso()
         atomic_write(
             self.runtime_dir / "current-run.yaml",
             yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
@@ -131,7 +146,7 @@ class RuntimeStateManager:
         data: dict[str, Any] = {
             "status": status,
             "team_id": team_id,
-            "last_updated": datetime.now().isoformat(),
+            "last_updated": utc_now_iso(),
         }
         if extra:
             data.update(extra)
@@ -161,7 +176,7 @@ class RuntimeStateManager:
             "status": status,
             "current_task": current_task,
             "progress": progress,
-            "last_updated": datetime.now().isoformat(),
+            "last_updated": utc_now_iso(),
             "produced_files": produced_files or [],
             "blocking_issues": blocking_issues or [],
         }
@@ -203,7 +218,7 @@ class RuntimeStateManager:
         """
         data = {
             "members": [{"instance_name": inst, "role": role} for inst, role in members],
-            "last_updated": datetime.now().isoformat(),
+            "last_updated": utc_now_iso(),
         }
         path = self.runtime_dir / "state" / "roster.yaml"
         atomic_write(path, yaml.safe_dump(data, allow_unicode=True, sort_keys=False))
@@ -220,7 +235,7 @@ class RuntimeStateManager:
     ) -> None:
         """向 events.jsonl 追加一条事件（带锁）。"""
         entry = {
-            "ts": datetime.now().isoformat(),
+            "ts": utc_now_iso(),
             "event": event,
             **details,
         }
@@ -243,18 +258,19 @@ class RuntimeStateManager:
     ) -> Path:
         """写一条消息到 messages/。
 
-        文件名：YYYYMMDD-HHMMSS-{from}-{to}.json
+        文件名：YYYYMMDD-HHMMSS-{from}-{to}.json（本地时间，便于肉眼扫目录）
+        内容 ts 字段：UTC ISO 8601 带毫秒精度（跨时区分析无歧义）
         """
-        ts = datetime.now()
+        local_now = datetime.now()
         filename = (
-            f"{ts.strftime('%Y%m%d-%H%M%S')}"
+            f"{local_now.strftime('%Y%m%d-%H%M%S')}"
             f"-{self._safe_filename_part(from_member)}"
             f"-{self._safe_filename_part(to_member)}.json"
         )
         path = self.runtime_dir / "messages" / filename
 
         data = {
-            "ts": ts.isoformat(),
+            "ts": utc_now_iso(),
             "from": from_member,
             "to": to_member,
             "type": msg_type,
@@ -270,4 +286,4 @@ class RuntimeStateManager:
         return raw.replace("/", "_").replace("\\", "_").replace(" ", "_").replace(":", "_")
 
 
-__all__ = ["RuntimeStateManager"]
+__all__ = ["RuntimeStateManager", "utc_now_iso"]

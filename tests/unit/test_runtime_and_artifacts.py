@@ -3,12 +3,34 @@
 from __future__ import annotations
 
 import json
+import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
 
 from ai_rd_team.artifacts.recorder import ArtifactRecorder
-from ai_rd_team.runtime.state import RuntimeStateManager
+from ai_rd_team.runtime.state import RuntimeStateManager, utc_now_iso
+
+
+class TestUtcNowIso:
+    """F1 回归：utc_now_iso 应产生带 UTC 时区 + 毫秒精度的 ISO 8601 字符串。"""
+
+    def test_has_timezone_suffix(self) -> None:
+        s = utc_now_iso()
+        assert s.endswith("+00:00"), f"expected UTC timezone suffix, got {s!r}"
+
+    def test_has_millisecond_precision(self) -> None:
+        s = utc_now_iso()
+        # 形如 2026-05-04T03:12:45.678+00:00
+        pattern = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+00:00$"
+        assert re.match(pattern, s), f"format should be YYYY-MM-DDTHH:MM:SS.sss+00:00, got {s!r}"
+
+    def test_roundtrip_parseable(self) -> None:
+        s = utc_now_iso()
+        parsed = datetime.fromisoformat(s)
+        assert parsed.tzinfo is not None
+        assert parsed.utcoffset() == timezone.utc.utcoffset(None)
 
 
 class TestRuntimeStateManager:

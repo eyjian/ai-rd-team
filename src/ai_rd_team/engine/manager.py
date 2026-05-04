@@ -71,6 +71,9 @@ _MODE_DEFAULT_ROLES: dict[RunMode, list[str]] = {
     "full": ["pm", "analyst", "architect", "developer", "reviewer", "tester", "devops"],
 }
 
+# 成员 state 的终态集合（stop_run 时不再兜底覆盖这些状态）
+_MEMBER_TERMINAL_STATUSES = frozenset({"done", "failed", "terminated"})
+
 
 class TeamEnvironmentManager:
     """引擎主类：管理团队环境的生命周期。
@@ -335,7 +338,12 @@ class TeamEnvironmentManager:
     # ------------------------------------------------------------
 
     def stop_run(self, reason: str = "normal") -> None:
-        """停止当前运行：优雅关闭成员 + 删除团队。"""
+        """停止当前运行：优雅关闭成员 + 删除团队。
+
+        兜底行为（F3）：对于没有主动把 state 更新为 done/failed 的成员，
+        Engine 会把它们的 state 标记为 terminated，避免遗留 spawning/working 等
+        假活状态误导后续分析。
+        """
         if self._ctx is None:
             logger.warning("stop_run called without active run")
             return
@@ -344,6 +352,7 @@ class TeamEnvironmentManager:
 
         self._state = EngineState.STOPPING
         run_id = self._ctx.run_id
+        team_id = self._ctx.team_handle.team_id if self._ctx.team_handle is not None else ""
 
         self._runtime_state.append_event(
             "run_stopping",
@@ -351,10 +360,16 @@ class TeamEnvironmentManager:
             reason=reason,
         )
 
-        # 1. 请求每个成员 shutdown
+        # 1. 请求每个成员 shutdown（F3：带上'请更新 state=done'引导）
+        shutdown_hint = (
+            "团队即将关闭。请把 "
+            ".ai-rd-team/runtime/state/members/<你的ID>.yaml 的 status 字段更新为 "
+            "'done'（若工作完成）或 'failed'（若未完成），然后退出。"
+            f"原因：{reason or 'normal'}"
+        )
         for instance_name, member in list(self._ctx.members.items()):
             try:
-                self._adapter.request_member_shutdown(member, reason=reason)
+                self._adapter.request_member_shutdown(member, reason=shutdown_hint)
             except Exception as e:
                 logger.warning("shutdown_request failed for %s: %s", instance_name, e)
 
@@ -365,13 +380,49 @@ class TeamEnvironmentManager:
             except Exception as e:
                 logger.warning("delete_team failed: %s", e)
 
-        # 3. 更新 state
-        self._runtime_state.write_team_state(status="shut_down")
+        # 3. 兜底：把未终止状态的成员 state 置为 terminated（F3）
+        self._finalize_member_states()
+
+        # 4. 更新 state（F2：带上 team_id 避免丢字段）
+        self._runtime_state.write_team_state(status="shut_down", team_id=team_id)
         self._runtime_state.update_run_status("stopped")
         self._runtime_state.append_event("run_stopped", run_id=run_id, reason=reason)
 
         self._state = EngineState.STOPPED
         logger.info("Run stopped: id=%s reason=%s", run_id, reason)
+
+    def _finalize_member_states(self) -> None:
+        """把还未到终态（done/failed/terminated）的成员 state 补齐为 terminated。
+
+        这是为了避免 E2E 报告中发现的"成员 state 残留 spawning/working"问题：
+        成员可能在写 state 前被 shutdown / 或者只写了文件就退出，未更新 state=done。
+        Engine 兜底一把，保证 run 结束后每个 state 都有明确终态。
+        """
+        assert self._runtime_state is not None
+        assert self._ctx is not None
+
+        states = self._runtime_state.list_member_states()
+
+        for instance_name, _member in self._ctx.members.items():
+            existing = states.get(instance_name)
+            if existing and existing.get("status") in _MEMBER_TERMINAL_STATUSES:
+                continue
+
+            role = (existing or {}).get("role", _member.role)
+            current_task = (existing or {}).get("current_task", "")
+            progress = (existing or {}).get("progress", "")
+            produced = (existing or {}).get("produced_files") or []
+            blocking = (existing or {}).get("blocking_issues") or []
+
+            self._runtime_state.write_member_state(
+                instance_name=instance_name,
+                role=role,
+                status="terminated",
+                current_task=current_task,
+                progress=progress,
+                produced_files=list(produced),
+                blocking_issues=list(blocking),
+            )
 
     # ------------------------------------------------------------
     # 私有辅助
