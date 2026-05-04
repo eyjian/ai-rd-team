@@ -212,7 +212,9 @@ class FileBasedBridge(CodeBuddyToolBridge):
 
         # 超时：尽量清理 intent 文件
         self._cleanup(intent_path, None)
-        raise TimeoutError(f"Tool call timed out: op={intent.get('op')}")
+        op = intent.get("op", "<unknown>")
+        hint = _timeout_hint(op, self.timeout)
+        raise TimeoutError(f"Tool call timed out: op={op} (waited {self.timeout:.0f}s). {hint}")
 
     @staticmethod
     def _cleanup(intent_path: Path, result_path: Path | None) -> None:
@@ -220,6 +222,35 @@ class FileBasedBridge(CodeBuddyToolBridge):
             if p is not None:
                 with contextlib.suppress(OSError):
                     p.unlink()
+
+
+# ------------------------------------------------------------
+# 超时提示（M7 加强：让用户知道具体怎么排查）
+# ------------------------------------------------------------
+
+_MANUAL_OPS = {"team_create", "task", "team_delete"}
+
+
+def _timeout_hint(op: str, timeout: float) -> str:
+    """构造超时提示文案，针对不同 op 给具体排查步骤。"""
+    if op in _MANUAL_OPS or op == "send_message":
+        return (
+            "Check if the CodeBuddy main Agent has activated the "
+            "`ai-rd-team-bridge` Skill to answer intents. "
+            "Inspect `.ai-rd-team/runtime/adapter-intents/` for unanswered files, "
+            "and `.ai-rd-team/runtime/events.jsonl` for `bridge_auto_responded` traces. "
+            "If you are testing without a main Agent, use BridgeSimulator or InMemoryBridge."
+        )
+    if op in {"_version", "_probe"}:
+        return (
+            "These ops should be answered locally by CodeBuddyAdapter (M5+). "
+            "If you see this timeout, `adapter.auto_bridge=false` may be set without "
+            "the main Agent handling bridge intents manually."
+        )
+    return (
+        f"No response within {timeout:.0f}s. "
+        "Either the main Agent is offline, or the bridge Skill is not active."
+    )
 
 
 class BridgeToolError(RuntimeError):

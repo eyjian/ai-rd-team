@@ -142,6 +142,24 @@ class TestFileBasedBridgeTimeout:
         with pytest.raises(TimeoutError):
             bridge.call_team_delete()
 
+    def test_timeout_message_mentions_op_and_hint(self, runtime_dir: Path) -> None:
+        """M7：超时 error 应带 op 名 + 指引主 Agent 排查。"""
+        bridge = FileBasedBridge(
+            runtime_dir,
+            timeout_seconds=0.3,
+            poll_interval_seconds=0.05,
+        )
+        with pytest.raises(TimeoutError) as exc_info:
+            bridge.call_team_create("run-001", "desc")
+
+        msg = str(exc_info.value)
+        # op 名一定在
+        assert "team_create" in msg
+        # 超时秒数提示
+        assert "waited" in msg
+        # 针对 manual-op 的指引
+        assert "ai-rd-team-bridge" in msg or "adapter-intents" in msg
+
         # 超时后应清理 intent 文件
         # (result 本来就没有)
         assert list((runtime_dir / "adapter-intents").glob("*.json")) == []

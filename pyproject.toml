@@ -132,6 +132,14 @@ exclude = [
 line-length = 100
 target-version = "py310"
 src = ["src"]
+# prototype/ 是 M1-M4 的原型代码快照（冻结的历史资产），豁免 lint
+# examples/ 是示例项目（含生成的代码与模板），也豁免
+# generated-images/ 是 image_gen 产物（若有）
+extend-exclude = [
+    "prototype",
+    "examples",
+    "generated-images",
+]
 
 [tool.ruff.lint]
 select = [
