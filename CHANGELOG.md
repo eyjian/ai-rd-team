@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (M6 — CodeBuddy marketplace 规范化)
+
+- **关键修复**：CodeBuddy Skill 目录结构从 M1 起就不符合 CodeBuddy marketplace 规范，导致主 Agent 无法自动识别 `ai-rd-team-launcher` 和 `ai-rd-team-bridge` 两个 Skill，之前的 E2E 全靠人工念"按 bridge.md 协议处理"激活。
+  - 原结构（错误）：`<repo>/skills/ai-rd-team-launcher.md`（单文件 + YAML frontmatter）
+  - 新结构（标准）：`<repo>/.codebuddy-plugin/marketplace.json` + `<repo>/plugins/ai-rd-team/.codebuddy-plugin/plugin.json` + `<repo>/plugins/ai-rd-team/skills/ai-rd-team-launcher/SKILL.md`（与 `codebuddy-plugins-official` / `obra_superpowers-marketplace` 完全一致）
+- `src/ai_rd_team/__init__.py` 新增 `codebuddy_marketplace_dir()`（返回 marketplace 根）；`skills_dir()` 保留作为向后兼容别名，转发到新函数。
+- `src/ai_rd_team/cli/main.py::skills` 输出重写，提供两种安装方式（marketplace 软链 / 用户级拷贝）。
+- 安装方式支持 CodeBuddy 插件面板的三种范围：用户 / 项目 / 本地。
+- `pyproject.toml` 的 `[tool.hatch.build.targets.sdist].include` 补 `plugins` 和 `.codebuddy-plugin`，确保 sdist 带新结构。
+- 文档同步：`docs/01-getting-started.md § 第 2 步`、`README.md § 方式 C`、`skills/README.md`（改为迁移说明页）全部重写。
+
 ### Planned
 
 - 首次在 GLM-5.1 上的跨模型基线 E2E（见 `docs/follow-ups/GLM51-compat.md`），需 CodeBuddy 侧切换模型会话后补跑

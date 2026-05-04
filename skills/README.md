@@ -1,54 +1,44 @@
-# ai-rd-team Skills 包
+# ⚠️ 此目录已迁移（0.1.0b1 → M6 修复）
 
-本目录包含 ai-rd-team 为 CodeBuddy（以及未来 Trae / Qoder）提供的 Skill 文件。
+此目录**已不再**存放 CodeBuddy Skill 文件。
 
-## 两种使用方式
+## 新位置
 
-### 方式 A：作为 Python 包 + Skill 组合（推荐）
+ai-rd-team 的 CodeBuddy Skills 已重组为标准 **CodeBuddy marketplace 结构**，位于：
+
+```
+<repo-root>/
+├── .codebuddy-plugin/
+│   └── marketplace.json               ← marketplace 声明
+└── plugins/
+    └── ai-rd-team/
+        ├── .codebuddy-plugin/
+        │   └── plugin.json            ← plugin 元数据
+        └── skills/
+            ├── ai-rd-team-launcher/
+            │   └── SKILL.md
+            └── ai-rd-team-bridge/
+                └── SKILL.md
+```
+
+## 为什么迁移
+
+原结构是**单 `.md` 文件 + YAML frontmatter**，放在 `<repo>/skills/` 下，让用户 `ln -s ~/.codebuddy/plugins/marketplaces/local/skills/`。
+
+这个设计从 M1 就是错的——**CodeBuddy 根本不扫描 `marketplaces/local/skills/` 这种路径**。`marketplaces/<name>/plugins/<plugin>/skills/<skill>/SKILL.md` 才是官方约定的四层结构。
+
+M6 修复把项目结构改成与 `codebuddy-plugins-official` / `obra_superpowers-marketplace` 完全一致，可以直接被 CodeBuddy 识别。
+
+## 怎么用新结构安装
 
 ```bash
-# 1. 安装 Python 包
-pip install ai-rd-team
-
-# 2. 把 Skills 目录链接到 CodeBuddy 本地 Skills
-#    （或复制，取决于 CodeBuddy 版本）
-ln -s $(python -c "import ai_rd_team, pathlib; print(pathlib.Path(ai_rd_team.__file__).parent.parent.parent / 'skills')") \
-      ~/.codebuddy/plugins/marketplaces/local/skills/ai-rd-team
-
-# 3. 在 CodeBuddy 会话中使用
-# 用户：use skill ai-rd-team-launcher
-# 用户：做一个 TodoList 小程序
+ai-rd-team skills   # 工具会告诉你 marketplace 根路径 + 安装命令
 ```
 
-### 方式 B：纯 Skill 安装（未来，待 CodeBuddy 支持 bundled Python）
+详见：
+- [docs/01-getting-started.md § 第 2 步](../docs/01-getting-started.md#第-2-步把-skill-安装到-codebuddy只做一次)
+- [README.md § 方式 C](../README.md)
 
-```
-codebuddy skill install ai-rd-team
-```
+## 相关提交
 
-## Skills 清单
-
-| Skill | 用途 | 由谁触发 |
-|-------|-----|---------|
-| `ai-rd-team-launcher.md` | 入口引导：用户说"启动 ai-rd-team" 时激活 | 用户意图 |
-| `ai-rd-team-bridge.md` | Bridge 监听：引擎启动后自动处理 intent 文件 | 引擎启动 |
-
-## Skill 与 Python 引擎的关系
-
-```
-用户
-  │ "启动 ai-rd-team 做 xxx"
-  ▼
-launcher.md（指引主 Agent）
-  │ 启动 Python 进程：ai-rd-team run "..."
-  ▼
-引擎初始化
-  │ Bridge 写 intent：runtime/adapter-intents/{uuid}.json
-  ▼
-bridge.md（监听 Skill）
-  │ 主 Agent 读 intent → 调 team_create/task/send_message → 写 result
-  ▼
-引擎读 result → 业务层继续
-```
-
-**关键**：Python 引擎不能直接调 CodeBuddy 工具，必须由主 Agent 承担"工具调用者"角色。
+- 旧单文件 Skill → 新 plugin+SKILL.md 目录式：见 git log 搜 `M6 fix: codebuddy marketplace 规范化`

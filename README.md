@@ -140,22 +140,28 @@ ai-rd-team config preset --list
 ai-rd-team run "做一个带 JWT 登录的 TodoList API"
 ```
 
-### 方式 C：作为 CodeBuddy Skill 触发
+### 方式 C：作为 CodeBuddy Skill 触发（推荐）
+
+ai-rd-team 仓库本身就是一个 **CodeBuddy marketplace**（含 `.codebuddy-plugin/marketplace.json` + `plugins/ai-rd-team/`）。链接一次，之后 `git pull` 即更新：
 
 ```bash
-# 查看 Skills 目录路径
+# 1. 查看本机 marketplace 根路径
 ai-rd-team skills
 
-# 软链到 CodeBuddy Skills 目录
-ln -s $(python -c "import ai_rd_team; print(ai_rd_team.skills_dir())") \
-      ~/.codebuddy/plugins/marketplaces/local/skills/ai-rd-team
+# 2. 链接到 CodeBuddy marketplaces 目录
+mkdir -p ~/.codebuddy/plugins/marketplaces/
+ln -s $(python -c "import ai_rd_team; print(ai_rd_team.codebuddy_marketplace_dir())") \
+      ~/.codebuddy/plugins/marketplaces/ai-rd-team-marketplace
+
+# 3. 重启 CodeBuddy → 插件面板 → ai-rd-team → 安装（选 用户/项目/本地 范围）
 ```
 
 然后在 CodeBuddy 会话中：
 ```
-你：use skill ai-rd-team-launcher
-你：做一个 TodoList 小程序
+你：用 ai-rd-team 做一个 TodoList 小程序
 ```
+
+详细步骤（3 种安装范围对比、常见坑、验证）见 [docs/01-getting-started.md § 第 2 步](docs/01-getting-started.md#第-2-步把-skill-安装到-codebuddy只做一次)。
 
 ---
 

@@ -1,0 +1,25 @@
+{
+  "name": "ai-rd-team",
+  "description": "ai-rd-team: 自主驱动的数字人研发团队 Marketplace（含 launcher + bridge 两个 Skill）",
+  "owner": {
+    "name": "eyjian",
+    "email": "eyjian@qq.com"
+  },
+  "plugins": [
+    {
+      "name": "ai-rd-team",
+      "description": "ai-rd-team 核心插件：launcher 启动入口 + bridge 工具桥接",
+      "description_en": "ai-rd-team core plugin: launcher (entry point) + bridge (tool forwarder)",
+      "version": "0.1.0b1",
+      "source": "./plugins/ai-rd-team",
+      "category": "ai-agent",
+      "author": {
+        "name": "eyjian",
+        "url": "https://github.com/eyjian"
+      },
+      "homepage": "https://github.com/eyjian/ai-rd-team",
+      "repository": "https://github.com/eyjian/ai-rd-team",
+      "license": "Apache-2.0"
+    }
+  ]
+}

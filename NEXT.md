@@ -1,7 +1,7 @@
 # NEXT — 下次工作时从这里开始
 
 > **用途**：session 交接的单一入口。下次任何人（或 AI session）继续这个项目时，**第一件事就是读这份文档**。
-> **最后更新**：2026-05-04 19:10（新增自定义 Skill example 04 + docs walkthrough 后）
+> **最后更新**：2026-05-04 20:35（M6 修复 CodeBuddy marketplace 规范化后）
 > **当前版本**：`0.1.0b1` beta（本地可装，**未发 PyPI**）
 > **仓库状态**：`main` 分支 clean，已同步 origin
 
@@ -27,12 +27,13 @@ ls docs/follow-ups/ 2>/dev/null         # 阻塞的 follow-up
 | 项 | 值 |
 |---|---|
 | 版本 | `0.1.0b1` beta |
-| 已完成里程碑 | M1 + M2 + M3 + M4 + M5（5 个，全 E2E 真实验证） |
+| 已完成里程碑 | M1 + M2 + M3 + M4 + M5 + M6（M6 非规划，临时修复 CodeBuddy marketplace 目录结构） |
 | 测试 | 425 passed / coverage 83% / ruff 全绿 |
 | 活跃 openspec change | 0 |
 | 正式 spec | `adapter-bridge-auto-responder`（M5 归档产物） |
 | PyPI | ❌ 未发布（用户决定暂缓，先手工安装） |
-| 本地产物 | `dist/ai_rd_team-0.1.0b1-{.whl,.tar.gz}`（git 忽略） |
+| 本地产物 | `dist/ai_rd_team-0.1.0b1-{.whl,.tar.gz}`（git 忽略，**M6 后需重建**因为结构变了） |
+| CodeBuddy marketplace | ✅ 已规范化（`.codebuddy-plugin/marketplace.json` + `plugins/ai-rd-team/skills/*/SKILL.md`） |
 
 ---
 

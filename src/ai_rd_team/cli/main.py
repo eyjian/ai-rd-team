@@ -47,26 +47,47 @@ def version() -> None:
 
 @app.command()
 def skills() -> None:
-    """显示 Skills 目录路径，用于链接到 CodeBuddy Skills 目录。"""
-    from ai_rd_team import skills_dir
+    """显示 CodeBuddy marketplace 根目录，指导用户链接到 ~/.codebuddy/plugins/marketplaces/。"""
+    from ai_rd_team import codebuddy_marketplace_dir
 
-    path = skills_dir()
-    console.print(f"ai-rd-team Skills 目录：[bold]{path}[/bold]")
+    path = codebuddy_marketplace_dir()
+    console.print(f"ai-rd-team CodeBuddy Marketplace 根：[bold]{path}[/bold]")
     if not path.is_dir():
         console.print("[yellow]⚠️ 目录不存在，可能需要从源码安装[/yellow]")
         return
 
-    skills_found = sorted(path.glob("ai-rd-team-*.md"))
-    if skills_found:
+    # 检查 marketplace 声明是否齐全
+    marketplace_json = path / ".codebuddy-plugin" / "marketplace.json"
+    plugin_dir = path / "plugins" / "ai-rd-team"
+    plugin_json = plugin_dir / ".codebuddy-plugin" / "plugin.json"
+    skills_root = plugin_dir / "skills"
+
+    if not marketplace_json.is_file():
+        console.print(f"[yellow]⚠️ 缺少 {marketplace_json.relative_to(path)}[/yellow]")
+        return
+    if not plugin_json.is_file():
+        console.print(f"[yellow]⚠️ 缺少 {plugin_json.relative_to(path)}[/yellow]")
+        return
+
+    # 列出 plugin 下的 skill
+    skill_dirs = sorted(p for p in skills_root.glob("*/SKILL.md") if p.is_file())
+    if skill_dirs:
         console.print("\n包含的 Skills：")
-        for s in skills_found:
-            console.print(f"  - {s.name}")
+        for s in skill_dirs:
+            console.print(f"  - {s.parent.name}  ([dim]{s.relative_to(path)}[/dim])")
 
     console.print(
-        "\n链接到 CodeBuddy（macOS/Linux）：\n"
-        "  [bold]mkdir -p ~/.codebuddy/plugins/marketplaces/local/skills/[/bold]\n"
+        "\n[bold]安装方式 1：链接为 local marketplace（推荐，零拷贝、代码更新即生效）[/bold]\n"
+        "  [bold]mkdir -p ~/.codebuddy/plugins/marketplaces/[/bold]\n"
         f"  [bold]ln -s {path} "
-        "~/.codebuddy/plugins/marketplaces/local/skills/ai-rd-team[/bold]"
+        "~/.codebuddy/plugins/marketplaces/ai-rd-team-marketplace[/bold]\n"
+        '  然后重启 CodeBuddy，在 [dim]插件市场 → ai-rd-team[/dim] 选"为您安装"或'
+        '"本地范围安装"。\n'
+        "\n[bold]安装方式 2：手动复制 Skill 为用户级[/bold]\n"
+        "  [bold]mkdir -p ~/.codebuddy/skills/[/bold]\n"
+        f"  [bold]cp -r {skills_root}/* ~/.codebuddy/skills/[/bold]\n"
+        "  重启 CodeBuddy，Skill 自动生效（但 plugin 级的更细分安装范围将不可用）。\n"
+        "\n两种方式生效后，在 CodeBuddy 会话里说「启动 ai-rd-team 做 xxx」即可激活。"
     )
 
 

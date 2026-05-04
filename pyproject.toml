@@ -114,6 +114,8 @@ exclude = [
 include = [
     "src/ai_rd_team",
     "skills",
+    "plugins",
+    ".codebuddy-plugin",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",

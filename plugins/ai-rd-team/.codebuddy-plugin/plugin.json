@@ -1,0 +1,22 @@
+{
+  "name": "ai-rd-team",
+  "description": "自主驱动的数字人研发团队。两个核心 Skill：ai-rd-team-launcher（启动入口，识别\"启动 ai-rd-team\"类用户意图）+ ai-rd-team-bridge（工具桥接，把 Python 引擎的 intent 转成 team_create/task/send_message/team_delete 调用）。",
+  "description_en": "Self-driven digital research team. Two skills: launcher (entry) + bridge (tool forwarder).",
+  "version": "0.1.0b1",
+  "author": {
+    "name": "eyjian",
+    "email": "eyjian@qq.com",
+    "url": "https://github.com/eyjian"
+  },
+  "homepage": "https://github.com/eyjian/ai-rd-team",
+  "repository": "https://github.com/eyjian/ai-rd-team",
+  "license": "Apache-2.0",
+  "keywords": [
+    "ai-agent",
+    "multi-agent",
+    "digital-team",
+    "codebuddy",
+    "autonomous",
+    "software-engineering"
+  ]
+}
