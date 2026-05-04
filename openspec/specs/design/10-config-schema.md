@@ -1,69 +1,419 @@
 # ai-rd-team 详细设计 - 10 配置 Schema
 
-> 文档版本：v1.0
-> 日期：2026-05-03
+> 文档版本：v1.1
+> 日期：2026-05-04（v1.1：加入零配置 + 分层模型 + 对话引导）
 > 颗粒度：**实现级**
 > 依赖：`00-overview.md`
+
+---
+
+## 0. 核心理念：低门槛优先（AI 时代）
+
+**问题**：本文档后续章节暴露了 400+ 配置项，但普通用户不该看到这些。
+
+**原则**：
+> **零配置即可用；对话式引导补全关键选择；YAML 只是持久化，不是主要交互界面。**
+
+### 0.1 三层配置模型
+
+| 层 | 文件 | 字段数 | 目标用户 | 何时出现 |
+|----|------|-------|---------|---------|
+| 🟢 **Zero Config（零配置）** | 无 | 0 | 初次使用者 | 默认情况 |
+| 🟢 **Basic（基础层）** | `.ai-rd-team/config.yaml` | ~5-10 | 想做一些调整 | 首次启动引导后自动生成 |
+| 🟡 **Advanced（高级层）** | `.ai-rd-team/config.advanced.yaml` | 全量 | 企业/定制化 | `ai-rd-team config advanced` 命令生成 |
+| 🔴 **Defaults（内置默认）** | 代码内置 `defaults.yaml` | 全量 | 不可见 | 始终加载 |
+
+**加载优先级**：`defaults` ← `global` ← `project/config.yaml` ← `project/config.advanced.yaml`（项目级最高，advanced 覆盖 basic）。
+
+### 0.2 零配置流程
+
+```
+$ cd my-project
+$ ai-rd-team run "我想做一个日报系统"
+```
+
+若 `.ai-rd-team/config.yaml` 不存在，触发**首次启动对话引导**（≤ 3 个问题，20 秒完成）：
+
+```
+👋 你好，我是 ai-rd-team。我检测到这是你第一次在这个项目使用我。
+
+我已经看了你的项目（识别到：空项目 / Go项目 / Python项目 / Vue项目等）。
+请回答 3 个问题，之后我就能开始工作了：
+
+1. 项目规模大概是？
+   [1] 小玩意，几天能搞定（推荐 Lite）
+   [2] 正经项目，几周 ← 默认
+   [3] 大系统，慢慢来（推荐 Full）
+   > [回车接受默认]
+
+2. 技术栈？
+   [1] 我不管，架构师自己定 ← 默认
+   [2] 复用现有项目的栈（已识别：xxx）
+   [3] 指定：Go+Kratos 后端 / Vue3 PC / 微信小程序
+   [4] 其他（稍后自己改）
+   > [回车接受默认]
+
+3. 预算大约？
+   [1] 能省则省（Lite 预算 120 RP）
+   [2] 平衡 ← 默认（Standard 400 RP/次, 2000 RP/天）
+   [3] 要最好的（Full 1500 RP/次）
+   > [回车接受默认]
+
+✅ 已创建 .ai-rd-team/config.yaml（10 行，包含你的选择）
+✅ 已准备就绪，开始工作...
+```
+
+**之后每次 `ai-rd-team run "xxx"` 就真正零打扰**。
+
+### 0.3 最小 config.yaml（基础层完整形态）
+
+首次引导后自动生成的 `.ai-rd-team/config.yaml`：
+
+```yaml
+# 这是 ai-rd-team 的基础配置（自动生成，可手动编辑）
+# 完整配置见 config.advanced.yaml（运行 `ai-rd-team config advanced` 生成）
+
+project:
+  description: "我想做一个日报系统"  # 首次启动时用户输入
+
+run_mode: standard          # lite / standard / full
+
+# 可选：指定技术栈（留空则架构师自主选择）
+tech_stack:
+  backend: null
+  frontend: null
+  mobile: null
+
+budget:
+  per_run: 400              # Resource Points 单次上限
+  per_day: 2000             # 日上限
+```
+
+**就这 5 个顶层字段。** 其他一切都用默认值。
+
+### 0.4 高级配置：按需启用
+
+用户需要调高级选项时：
+
+```bash
+$ ai-rd-team config advanced
+# 生成 .ai-rd-team/config.advanced.yaml（带全部字段和注释）
+# 提示用户打开编辑
+```
+
+或通过 Web 面板可视化调整（见 `04-web-panel.md`）。
+
+### 0.5 智能推断（Convention over Configuration）
+
+以下字段**不出现在任何 config.yaml 中**，引擎自动推断：
+
+| 字段 | 推断方式 |
+|------|---------|
+| `project.name` | 工作区目录名 |
+| `project.workspace` | 当前目录 |
+| `tech_stack.proficiency` | 扫描项目文件（package.json / go.mod / requirements.txt） |
+| `display_currency` | 系统 locale（`zh_CN` → CNY，其他 → USD） |
+| `environment.os_supported` | 当前 OS |
+| `security.file_access.writable` | 默认 `<workspace>/**`（排除 `.git/`） |
+| `logging.level` | DEBUG 环境变量 → debug，否则 info |
+| `web.host` / `web.port` | 127.0.0.1 + 自动选择空闲端口 |
+
+**智能推断的优先级**：显式配置 > 引导输入 > 环境推断 > 代码默认值。
+
+### 0.6 交互方式优先级
+
+| 场景 | 推荐交互 | 方式 |
+|------|---------|------|
+| 首次使用 | 对话引导 | CLI 问 3 个问题 |
+| 日常调整 | Web 面板 | 表单式，不碰 YAML |
+| 特殊需求 | YAML 编辑 | `config.advanced.yaml` |
+| 团队共享配置 | Git 提交 | 只提交 `config.yaml`（不含敏感信息） |
 
 ---
 
 ## 1. 目的与范围
 
 ### 1.1 目的
-定义 ai-rd-team 的配置文件完整 Schema、加载优先级、校验规则、版本迁移策略。配置是用户与系统交互的主要界面之一，必须**清晰、可预测、可校验**。
+定义 ai-rd-team 的配置文件完整 Schema、加载优先级、校验规则、版本迁移策略。
+
+**注意**：本文档的后续章节（§2 起）描述"**全量 Schema**"——是给**实现者**看的参考手册，不是给**终端用户**看的门槛。
+- **终端用户** → 只看 §0
+- **实现者** → 看 §1 及以后
 
 ### 1.2 范围
-- `config.yaml`（项目/全局配置）
-- `pricing.yaml`（模型价格表，可选）
+- `config.yaml`（Basic 层：5-10 个字段）
+- `config.advanced.yaml`（Advanced 层：全量字段）
+- `pricing.yaml`（可选，仅高级用户）
 - `presets/*.yaml`（档位预设）
-- 运行时态的 `team.yaml`、`members/*.yaml`（只在本文件中引用，详见 `11-runtime-protocol.md`）
+- `defaults.yaml`（代码内置，用户不编辑）
+- 智能推断机制
+- 首次启动对话引导
 
 ### 1.3 非目标
 - ❌ 具体字段在业务逻辑中如何使用（由各模块文档定义）
-- ❌ UI 配置编辑器（由 `04-web-panel.md` 定义）
+- ❌ UI 配置编辑器实现细节（由 `04-web-panel.md` 定义）
+- ❌ 首次引导的对话脚本内容（见 §2A，本文档定义数据契约；脚本文案可在实现阶段迭代）
 
 ---
 
 ## 2. 配置文件层级与优先级
 
-### 2.1 两级配置
+### 2.1 四层配置（呼应 §0.1）
 
 ```
-~/.ai-rd-team/config.yaml              # 全局配置（所有项目共享）
-<workspace>/.ai-rd-team/config.yaml    # 项目配置（当前项目独有，优先）
+代码内置 defaults.yaml                    # 层 4：全量默认（用户不可见）
+    ↓ 可覆盖
+~/.ai-rd-team/config.yaml                 # 层 3：全局配置（所有项目共享，可选）
+    ↓ 可覆盖
+<workspace>/.ai-rd-team/config.yaml       # 层 2：项目 Basic 配置（首次引导生成）
+    ↓ 可覆盖
+<workspace>/.ai-rd-team/config.advanced.yaml  # 层 1：项目 Advanced 配置（CLI 触发生成）
 ```
+
+**层级越低越优先**（层 1 最终覆盖层 4）。
 
 ### 2.2 合并策略
 
-采用**深度合并 + 项目级覆盖全局级**：
+采用**深度合并 + 低层覆盖高层**：
 
-- **标量字段**（string/number/bool）：项目级直接覆盖全局级
-- **对象字段**（dict）：递归合并，同 key 项目级覆盖
-- **数组字段**（list）：项目级**完全替换**全局级（不做 merge）
+- **标量字段**（string/number/bool）：低层直接覆盖高层
+- **对象字段**（dict）：递归合并，同 key 低层覆盖
+- **数组字段**（list）：低层**完全替换**高层（不做 merge）
 
 **为什么数组不合并**：避免用户困惑。例如全局定义了 5 个角色，项目级定义了 3 个角色，合并后是 5 还是 8？完全替换最直观。
 
 ### 2.3 缺省值
 
-- 若全局和项目都未配置，使用代码内置默认值
+- 若所有配置文件都不存在，使用代码内置默认值
 - 默认值在 `defaults.yaml`（随代码分发，不允许用户编辑）
+- 用户通过**智能推断**可在运行时覆盖部分默认值（见 §0.5）
 
 ### 2.4 加载流程
 
 ```
-1. 读取 defaults.yaml（代码内置）
-2. 读取 ~/.ai-rd-team/config.yaml（全局，若存在）
-3. 读取 <workspace>/.ai-rd-team/config.yaml（项目，若存在）
-4. 按 §2.2 规则合并：defaults < global < project
-5. 应用档位 preset（若启动时选择了档位）
-6. JSON Schema 校验（见 §6）
-7. 配置版本迁移（若需要，见 §7）
-8. 最终产出 EffectiveConfig 对象
+1. 读取 defaults.yaml（代码内置，层 4）
+2. 执行智能推断（见 §0.5 和 §2B），产出 inferred 值
+3. 读取 ~/.ai-rd-team/config.yaml（层 3，若存在）
+4. 读取 <workspace>/.ai-rd-team/config.yaml（层 2，若存在）
+5. 读取 <workspace>/.ai-rd-team/config.advanced.yaml（层 1，若存在）
+6. 按 §2.2 规则合并：defaults < inferred < global < project_basic < project_advanced
+7. 若层 2 不存在 → 触发首次启动对话引导（见 §2A），生成层 2
+8. 应用档位 preset（若启动时选择了档位）
+9. JSON Schema 校验（见 §6）
+10. 配置版本迁移（若需要，见 §7）
+11. 最终产出 EffectiveConfig 对象
+```
+
+### 2.5 错误处理
+
+- **层 4 / 层 2 缺失**：正常情况，触发引导或用默认
+- **层 3 存在但格式错**：警告用户，跳过该层，不终止启动
+- **层 1 存在但校验失败**：致命，终止启动，提示用户修复
+
+---
+
+## 2A. 首次启动对话引导（数据契约）
+
+**触发条件**：加载时检测到 `<workspace>/.ai-rd-team/config.yaml` 不存在。
+
+### 2A.1 引导问题（≤ 3 个）
+
+每个问题都有**合理默认值**和**回车即接受**的行为。
+
+| # | 问题 | 选项（A/B/C...） | 默认 | 目标字段 |
+|---|------|----------------|------|---------|
+| 1 | 项目规模 | Lite / Standard / Full | Standard | `run_mode` |
+| 2 | 技术栈 | auto / reuse_existing / specify / custom | auto（架构师决定） | `tech_stack.*` |
+| 3 | 预算档位 | frugal / balanced / max_quality | balanced | `budget.*` |
+
+### 2A.2 引导产物
+
+引导结束后**必须产出**两样东西：
+
+1. **生成 `<workspace>/.ai-rd-team/config.yaml`**，内容符合 §3A 的 Basic Schema
+2. **触发一次 `EffectiveConfig` 构建**，供引擎后续使用
+
+### 2A.3 引导的跳过与重新触发
+
+| 场景 | 行为 |
+|------|------|
+| `ai-rd-team run --no-onboarding "需求"` | 跳过引导，用默认值 + 智能推断，不生成 `config.yaml` |
+| `ai-rd-team init` | 手动触发引导（覆盖已存在的 `config.yaml`） |
+| `ai-rd-team init --yes` | 全部采用推荐默认，无交互 |
+
+### 2A.4 引导的实现者契约
+
+引导由 `ConfigOnboarding` 模块实现（见 `01-engine.md` 启动流程）：
+
+```python
+class ConfigOnboarding:
+    """首次启动引导。
+    
+    本文档不定义具体问题文案（可迭代），但定义：
+    - 产出数据结构（§3A）
+    - 可跳过行为（§2A.3）
+    - 推断源（§0.5 和 §2B）
+    """
+    
+    def run(
+        self,
+        workspace: Path,
+        interactive: bool = True,
+    ) -> "BasicConfig":
+        """执行引导，返回 BasicConfig。
+        
+        - interactive=False：使用默认值，无用户交互
+        - 会同时把结果写到 workspace/.ai-rd-team/config.yaml
+        """
 ```
 
 ---
 
-## 3. config.yaml 完整 Schema
+## 2B. 智能推断映射表（实现级）
+
+以下推断由 `ConfigInference` 模块在加载阶段完成。
+
+### 2B.1 项目信息
+
+| 目标字段 | 推断来源 | 失败回退 |
+|---------|---------|---------|
+| `project.name` | `Path.cwd().name`（去除 `.`/`_` 前缀） | `"unnamed-project"` |
+| `project.workspace` | `Path.cwd()` | - |
+| `project.description` | `README.md` 首行标题 | `""`（引导时问用户） |
+
+### 2B.2 技术栈
+
+| 目标字段 | 推断来源 |
+|---------|---------|
+| `tech_stack.proficiency.python` | 扫描 `.py` / `requirements.txt` / `pyproject.toml` |
+| `tech_stack.proficiency.go` | 扫描 `go.mod` / `*.go` |
+| `tech_stack.proficiency.typescript` | 扫描 `package.json` / `tsconfig.json` |
+| `tech_stack.proficiency.vue` | 扫描 `package.json` 的 `dependencies.vue` |
+| `tech_stack.preferences.backend` | 优先级：`go.mod` → `requirements.txt` → `package.json` |
+| `tech_stack.preferences.frontend` | 扫描 `web/` 或 `frontend/` 目录 |
+
+推断结果**仅提示**，不强制使用。架构师仍可自主选择。
+
+### 2B.3 环境
+
+| 目标字段 | 推断来源 |
+|---------|---------|
+| `display_currency` | `locale.getlocale()` 或 `LANG` 环境变量：`zh_CN` → CNY，其他 → USD |
+| `environment.os_supported` | `platform.system()` |
+| `environment.python_min` | 当前 Python 版本 |
+| `logging.level` | `DEBUG=1` 环境变量 → debug，否则 info |
+| `web.host` | 默认 `127.0.0.1`（不要推 `0.0.0.0` 避免安全问题） |
+| `web.port` | 默认 `8765`，被占用时 +1 直到找到空闲 |
+
+### 2B.4 安全
+
+| 目标字段 | 推断 |
+|---------|------|
+| `security.file_access.writable` | `[<workspace>/**]` 排除 `.git/`、`.ai-rd-team/memory/decisions/` |
+| `security.file_access.readonly` | `[<workspace>/.git/**, <workspace>/.ai-rd-team/memory/decisions/**]` |
+| `security.file_access.forbidden` | `[/etc/**, /usr/**, ~/.ssh/**, ~/.aws/**, ~/.kube/**]` |
+| `security.commands.blocked` | 预设黑名单（见 §3.5） |
+
+### 2B.5 推断优先级
+
+```
+显式写入 config.advanced.yaml
+    > 显式写入 config.yaml
+    > 引导输入
+    > 环境推断（本节）
+    > defaults.yaml 默认值
+```
+
+---
+
+## 3A. Basic 层 Schema（用户直接接触）
+
+**这才是 99% 用户实际看到的 `config.yaml`**——最多 10 个字段。
+
+### 3A.1 完整 Basic Schema
+
+```yaml
+# <workspace>/.ai-rd-team/config.yaml
+# Basic 层：首次启动引导自动生成，可手动编辑
+# 高级配置用 `ai-rd-team config advanced` 生成 config.advanced.yaml
+
+# 配置版本
+config_version: "1.0"
+
+# 项目简要描述（可在首次引导中输入，或留空让成员读 README.md）
+project:
+  description: "一句话描述你想做什么"
+
+# 运行档位（lite/standard/full）
+run_mode: standard
+
+# 技术栈（留空表示让架构师自主选择；架构师会参考已有代码 + proficiency）
+tech_stack:
+  backend: null              # null / "go-kratos" / "python-flask" / "node-express" / ...
+  frontend: null             # null / "vue3" / "react" / ...
+  mobile: null               # null / "wechat-miniprogram" / "react-native" / ...
+
+# 预算（Resource Points）
+budget:
+  per_run: 400               # 单次运行上限
+  per_day: 2000              # 日上限
+```
+
+### 3A.2 字段说明
+
+| 字段 | 必填 | 默认 | 说明 |
+|------|-----|------|------|
+| `config_version` | ✅ | - | 自动生成 |
+| `project.description` | ❌ | 引导输入或 README | 一句话需求描述 |
+| `run_mode` | ❌ | `standard` | 档位 |
+| `tech_stack.backend` | ❌ | `null` | null 表示自主选择 |
+| `tech_stack.frontend` | ❌ | `null` | 同上 |
+| `tech_stack.mobile` | ❌ | `null` | 同上 |
+| `budget.per_run` | ❌ | 见档位（Lite 120 / Std 400 / Full 1500） | 随 `run_mode` 联动 |
+| `budget.per_day` | ❌ | 2000 | 日上限 |
+
+### 3A.3 与 Advanced Schema 的关系
+
+- **Basic 是 Advanced 的严格子集**：Basic 中所有字段都存在于 Advanced
+- **Basic 对应 Advanced 的路径映射**：
+
+| Basic | Advanced（§3）|
+|-------|--------------|
+| `project.description` | `project.description` |
+| `run_mode` | `cost_control.default_mode` + `cost_control.remembered_mode` |
+| `tech_stack.backend` | `tech_stack.preferences.backend` |
+| `budget.per_run` | `cost_control.budget_{mode}.max_resource_points` + `cost_control.quota.windows.per_run` |
+| `budget.per_day` | `cost_control.quota.windows.per_day` |
+
+加载器的职责是把 Basic 展开成 Advanced 全量视图后再合并（见 §8 `ConfigLoader`）。
+
+### 3A.4 Advanced 层的生成
+
+```bash
+$ ai-rd-team config advanced
+# 生成 <workspace>/.ai-rd-team/config.advanced.yaml
+# 内容：当前 EffectiveConfig 的全量导出（含所有推断+默认值），带注释说明
+# 用户编辑其中的字段后，下次启动生效
+```
+
+生成的 `config.advanced.yaml` 是**完整可读的全量配置**（不含推断源），用户可以放心删除不想改的部分（会回退到 Basic 或默认）。
+
+### 3A.5 Basic 校验规则
+
+| 字段 | 校验 |
+|------|------|
+| `run_mode` | 枚举：lite / standard / full |
+| `tech_stack.*` | string 或 null |
+| `budget.per_run` | 正整数 |
+| `budget.per_day` | ≥ `budget.per_run` |
+
+---
+
+## 3. config.advanced.yaml / defaults.yaml 完整 Schema
+
+> **读者提醒**：以下是**全量 Schema**（约 400 字段）。  
+> 终端用户**不需要看**——他们通过 §0.2 的引导 + §3A 的 Basic Schema 就够用。  
+> 本章节供**实现者**参考。
 
 ### 3.1 顶层结构
 
@@ -1005,75 +1355,144 @@ class ConfigLoader:
     ):
         self.global_dir = global_dir
         self.workspace_dir = workspace_dir or Path.cwd() / ".ai-rd-team"
+        self._onboarding = ConfigOnboarding()
+        self._inference = ConfigInference()
     
     def load(
         self,
         preset: Literal["lite", "standard", "full"] | None = None,
+        allow_onboarding: bool = True,
+        interactive: bool = True,
     ) -> EffectiveConfig:
-        """加载配置。
+        """加载配置（推荐入口）。
         
-        顺序：defaults → global → project → preset
+        完整流程：defaults → inferred → global → basic → advanced → preset → 校验
+        
+        Args:
+            preset: 启动时强制指定档位（覆盖 config 中的 run_mode）
+            allow_onboarding: 若项目 config.yaml 不存在，是否触发引导
+            interactive: 引导时是否允许用户交互（False 则用推荐默认）
         
         Raises:
-            ConfigNotFoundError: 全局和项目配置都不存在
             ConfigValidationError: 校验失败
             ConfigMigrationError: 版本迁移失败
         """
         ...
     
-    def save(self, config: EffectiveConfig, target: Literal["global", "project"]) -> None:
-        """保存配置。"""
-        ...
+    def load_basic(self) -> "BasicConfig | None":
+        """只加载 Basic 层（§3A），不做合并。
+        
+        用途：Web 面板显示"用户视角"的配置。
+        """
     
-    def validate(self, raw: dict) -> list[str]:
+    def load_advanced(self) -> dict | None:
+        """只加载 Advanced 层（§3），不做合并。
+        
+        用途：Web 面板的高级编辑视图。
+        """
+    
+    def expand_basic_to_advanced(
+        self,
+        basic: "BasicConfig",
+    ) -> dict:
+        """将 Basic 配置展开为 Advanced 全量字段（§3A.3 的映射）。
+        
+        用途：生成 config.advanced.yaml、Web 面板的"查看 advanced 形态"。
+        """
+    
+    def save_basic(
+        self,
+        basic: "BasicConfig",
+        target: Literal["global", "project"] = "project",
+    ) -> None:
+        """保存 Basic 层。"""
+    
+    def save_advanced(
+        self,
+        config: EffectiveConfig,
+        target: Literal["global", "project"] = "project",
+    ) -> None:
+        """保存 Advanced 层（导出当前 EffectiveConfig 为 config.advanced.yaml）。"""
+    
+    def validate(self, raw: dict, layer: Literal["basic", "advanced"] = "advanced") -> list[str]:
         """仅校验，不加载。返回错误列表。"""
         ...
     
-    def get_effective_source(self, key_path: str) -> Path:
-        """查询某配置项的最终来源文件（调试用）。"""
+    def get_effective_source(self, key_path: str) -> Path | Literal["inferred", "default"]:
+        """查询某配置项的最终来源（调试用）。
+        
+        返回：
+        - Path：来自某个配置文件
+        - "inferred"：来自智能推断
+        - "default"：来自代码内置默认
+        """
         ...
+
+
+class ConfigOnboarding:
+    """首次启动对话引导（见 §2A）。"""
+    
+    def run(
+        self,
+        workspace: Path,
+        interactive: bool = True,
+        inferred: dict | None = None,
+    ) -> "BasicConfig":
+        """执行引导，返回 BasicConfig 并写到 workspace/.ai-rd-team/config.yaml。"""
+        ...
+
+
+class ConfigInference:
+    """智能推断（见 §0.5 + §2B）。"""
+    
+    def infer(self, workspace: Path) -> dict:
+        """扫描工作区 + 环境，产出推断字段字典。"""
+        ...
+    
+    def infer_project_info(self, workspace: Path) -> dict:
+        """推断 project.* 字段。"""
+    
+    def infer_tech_stack(self, workspace: Path) -> dict:
+        """扫描代码推断 tech_stack.proficiency / preferences。"""
+    
+    def infer_environment(self) -> dict:
+        """推断 display_currency / environment.* / logging.level 等。"""
+    
+    def infer_security(self, workspace: Path) -> dict:
+        """产出安全默认（file_access / commands）。"""
 ```
 
 ---
 
-## 10. 用户交互：首次启动配置
+## 10. 用户交互流程（薄壳，细节见 §0 + §2A）
 
-### 10.1 交互流程
+### 10.1 CLI 命令总览
 
-若全局配置 `~/.ai-rd-team/config.yaml` 不存在，进入首次引导：
+| 命令 | 作用 |
+|------|------|
+| `ai-rd-team init` | 手动触发首次引导（覆盖已有 config.yaml） |
+| `ai-rd-team init --yes` | 全部采用推荐默认，无交互 |
+| `ai-rd-team run "需求"` | 若 config 缺失则自动触发引导，再执行 |
+| `ai-rd-team run --no-onboarding "需求"` | 跳过引导，用默认 + 推断 |
+| `ai-rd-team config show` | 查看当前 EffectiveConfig |
+| `ai-rd-team config show --layer basic` | 只看 Basic 层 |
+| `ai-rd-team config show --source <key>` | 查询某字段来自哪里（推断/文件/默认） |
+| `ai-rd-team config advanced` | 生成 config.advanced.yaml（全量字段 + 注释） |
+| `ai-rd-team config validate` | 仅校验 config 文件 |
 
-```
-欢迎使用 ai-rd-team！
-请回答几个问题以完成初始化：
+### 10.2 交互优先级
 
-1. 你的项目名称？
-   > [输入]
+| 用户类型 | 首选交互 | 补充 |
+|---------|---------|------|
+| 普通用户 | 首次引导（≤3 问） + Web 面板 | 绝不直接改 YAML |
+| 工程师 | `config.yaml`（Basic）+ Web 面板 | 偶尔 `config.advanced.yaml` |
+| 企业/定制化 | `config.advanced.yaml` + CI 同步 | 全量 YAML 审计 |
 
-2. 选择计费场景：
-   [1] 我用订阅制（Claude Pro / CodeBuddy Plus）
-   [2] 我按 token 付费（或公司有明确额度）
-   [3] 公司统一管理
-   [4] 我不确定，先用默认资源限制模式
-   > [选择]
+### 10.3 引导后的再启动
 
-3. 选择展示币种：
-   [1] 人民币 (CNY) ← 默认（基于 locale）
-   [2] 美元 (USD)
-   [3] 双币显示
-   > [选择]
-
-4. 每日使用额度（Resource Points）？
-   默认 2000，相当于每天约 5 次 Standard 运行。
-   > [数字或回车接受默认]
-
-配置已保存到 ~/.ai-rd-team/config.yaml
-```
-
-### 10.2 每次启动前检查
-
-- 若首次启动未完成 → 强制进入引导
-- 若全局配置存在但项目配置不存在 → 询问是否继承全局 / 定制化
-- 若配置版本过旧 → 提示迁移
+- 第 2 次起：完全零打扰，直接 `ai-rd-team run "xxx"` 即可
+- 修改 run_mode / 技术栈：直接改 `config.yaml` 或用 Web 面板
+- 重新走引导：`ai-rd-team init`（会备份旧 config 到 `.bak`）
 
 ---
 
@@ -1107,24 +1526,42 @@ class ConfigLoader:
 
 ## 12. 验收标准
 
-- ✅ 能加载 defaults + global + project 三级配置并正确合并
+### 12.1 低门槛（核心）
+- ✅ **零配置可运行**：用户不写任何 config，`ai-rd-team run "需求"` 能走到"首次引导"或直接使用智能推断 + 默认值
+- ✅ **首次引导 ≤ 3 个问题**，每题有合理默认，用户回车即过
+- ✅ **生成的 Basic `config.yaml` ≤ 20 行**（含空行和注释）
+- ✅ **智能推断**按 §2B 覆盖所有字段，推断失败时优雅回退默认
+- ✅ **`ai-rd-team config advanced`** 能正确导出完整 `config.advanced.yaml`
+- ✅ **Basic → Advanced 展开映射**按 §3A.3 正确工作（含 run_mode 联动预算）
+
+### 12.2 加载与合并
+- ✅ 能加载 defaults + inferred + global + basic + advanced 五层并正确合并
+- ✅ 层级优先级严格符合 §0.1
+- ✅ `get_effective_source(key)` 能准确返回每个字段的来源
 - ✅ JSON Schema 校验覆盖所有必填字段和关键约束
 - ✅ 支持从 v1.0 到最新版的迁移
-- ✅ 首次启动交互式引导可完成基础配置
 - ✅ EffectiveConfig 对象不可变，线程安全
 - ✅ 提供 3 份 preset（lite/standard/full）
-- ✅ 单元测试覆盖 ≥ 80%（加载/合并/校验/迁移各路径）
+
+### 12.3 错误处理
+- ✅ 缺失 basic + 禁用引导时能用推断 + 默认运行
+- ✅ advanced 校验失败给出可修复的提示
+- ✅ 单元测试覆盖 ≥ 80%（加载/合并/校验/迁移/推断/引导）
+- ✅ 集成测试：从零配置到完整运行一次 Standard 档
+
+### 12.4 可达性
+- ✅ 所有基础操作（init / run / config show / config advanced）都有对应 CLI
+- ✅ Web 面板能加载 Basic / Advanced 双视图（由 `04-web-panel.md` 实现）
 
 ---
 
 ## 13. 附录：配置示例文件
 
-将提供 3 份完整示例：
-- `examples/config-minimal.yaml`：最小配置
-- `examples/config-standard.yaml`：中等复杂度配置
-- `examples/config-full.yaml`：覆盖所有字段的完整配置
-
-（示例文件在实现阶段产出）
+将提供 4 份完整示例（实现阶段产出）：
+- `examples/config-zero.md`：零配置场景的说明（无实际 yaml 文件）
+- `examples/config-basic.yaml`：首次引导生成的 Basic 示例（~20 行）
+- `examples/config-advanced.yaml`：完整 Advanced 示例（带全部注释）
+- `examples/config-enterprise.yaml`：企业场景示例（含 central_quota、securty 强化）
 
 ---
 
@@ -1132,9 +1569,10 @@ class ConfigLoader:
 
 | 使用方 | 接口 |
 |-------|-----|
-| `01-engine.md` | `ConfigLoader.load()` → `EffectiveConfig` |
+| `01-engine.md` | `ConfigLoader.load(allow_onboarding=True)` → `EffectiveConfig`；Engine.initialize 在 ConfigLoader 之后检查是否刚做过引导（用于日志） |
 | `02-adapter.md` | `EffectiveConfig.adapter` 决定 Adapter 类型 |
-| `05-roles-skills.md` | `EffectiveConfig.roles` 定义成员与 Skills |
-| `08-cost-control.md` | `EffectiveConfig.cost_control` 完整配置 |
-| `04-web-panel.md` | 配置编辑器使用 Schema 生成表单 |
-| `09-hooks-security.md` | `EffectiveConfig.hooks` + `.security` |
+| `05-roles-skills.md` | `EffectiveConfig.roles` 定义成员与 Skills；Basic 层不直接含 roles，由 Advanced 或 preset 提供 |
+| `08-cost-control.md` | `EffectiveConfig.cost_control` 完整配置；Basic 的 `run_mode` / `budget.*` 映射到此 |
+| `04-web-panel.md` | Basic/Advanced 双视图表单；Web 面板调用 `ConfigLoader.load_basic/load_advanced` |
+| `09-hooks-security.md` | `EffectiveConfig.hooks` + `.security`；security 默认值由 §2B.4 智能推断 |
+| CLI（本文档 §10） | `ai-rd-team init/run/config` 系列命令的数据契约 |

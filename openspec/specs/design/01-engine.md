@@ -184,16 +184,33 @@ class TeamEnvironmentManager:
     def initialize(
         self,
         preset: Literal["lite", "standard", "full"] | None = None,
+        allow_onboarding: bool = True,
+        interactive: bool = True,
     ) -> None:
         """初始化引擎（加载配置+Skills+Memory+Adapter）。
         
         必须在 start_run 之前调用一次。
+        
+        Args:
+            preset: 强制指定档位（覆盖 config.yaml 中的 run_mode）
+            allow_onboarding: 若项目 config.yaml 不存在，是否触发首次启动对话引导
+                （见 10-config-schema.md §0.2 / §2A）
+            interactive: 引导时是否允许交互式询问用户。False 时用推荐默认值无打扰完成
+        
+        典型场景：
+        - `ai-rd-team run "需求"`：initialize(allow_onboarding=True, interactive=True)
+        - `ai-rd-team run --no-onboarding "需求"`：initialize(allow_onboarding=False)
+        - 在 CI 中：initialize(allow_onboarding=True, interactive=False)
         """
         self._ensure_state(EngineState.IDLE, EngineState.STOPPED)
         self._state = EngineState.INITIALIZING
         
         try:
-            self._do_initialize(preset=preset)
+            self._do_initialize(
+                preset=preset,
+                allow_onboarding=allow_onboarding,
+                interactive=interactive,
+            )
             self._state = EngineState.IDLE  # 初始化完成，待 start_run
         except Exception as e:
             self._state = EngineState.ERROR
@@ -291,10 +308,23 @@ class TeamEnvironmentManager:
     
     # ===== 私有：初始化 =====
     
-    def _do_initialize(self, preset) -> None:
+    def _do_initialize(
+        self,
+        preset,
+        allow_onboarding: bool = True,
+        interactive: bool = True,
+    ) -> None:
         """组合所有子管理器。"""
         logger.info("Loading config...")
-        self._config = self.config_loader.load(preset=preset)
+        # ConfigLoader 内部：
+        #   - defaults → inferred（智能推断）→ global → project basic → project advanced
+        #   - 若 basic 缺失且 allow_onboarding=True，触发首次启动对话引导（≤3 问）
+        #   - interactive=False 时引导全自动（推荐默认）
+        self._config = self.config_loader.load(
+            preset=preset,
+            allow_onboarding=allow_onboarding,
+            interactive=interactive,
+        )
         
         logger.info("Initializing adapter...")
         self._adapter = create_adapter(
@@ -1247,14 +1277,28 @@ sequenceDiagram
     participant U as User
     participant E as Engine
     participant C as ConfigLoader
+    participant O as ConfigOnboarding
+    participant I as ConfigInference
     participant S as SkillsLoader
     participant M as MemoryManager
     participant A as Adapter
     participant T as Team
     participant Mem as Members
 
-    U->>E: initialize(preset="standard")
-    E->>C: load()
+    U->>E: initialize(preset?, allow_onboarding=True)
+    E->>C: load(allow_onboarding, interactive)
+    C->>I: infer(workspace)
+    I-->>C: inferred dict (tech_stack / locale / ...)
+    
+    alt project config.yaml 缺失 && allow_onboarding
+        C->>O: run(workspace, interactive, inferred)
+        O->>U: 3 个问题（run_mode / tech_stack / budget）
+        U-->>O: 回车接受默认 or 选择
+        O->>O: 写入 .ai-rd-team/config.yaml (Basic, ~20 行)
+        O-->>C: BasicConfig
+    end
+    
+    C->>C: 合并 defaults ← inferred ← global ← basic ← advanced
     C-->>E: EffectiveConfig
     E->>A: create_adapter() & initialize()
     A-->>E: OK
@@ -1333,6 +1377,7 @@ sequenceDiagram
 | ED6 | 升档只加成员不改已有成员上下文 | 避免中断正在进行的工作 |
 | ED7 | 启动时只发一条消息给 "starter" | P1 验证 main 零干预效果好 |
 | ED8 | 断点续跑第一期采用 prompt 询问 | 避免自动恢复导致副作用 |
+| ED9 | Engine.initialize 支持零配置 + 对话引导 | AI 时代低门槛（10-config §0）：`allow_onboarding=True` 时缺配置自动走 3 问引导；`interactive=False` 支持 CI |
 
 ---
 
