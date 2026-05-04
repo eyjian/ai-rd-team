@@ -77,18 +77,22 @@ def skills() -> None:
             console.print(f"  - {s.parent.name}  ([dim]{s.relative_to(path)}[/dim])")
 
     console.print(
-        "\n[bold]推荐：通过 CodeBuddy CLI 安装（已真机验证）[/bold]\n"
-        f"  [bold]codebuddy plugin marketplace add {path}[/bold]\n"
-        "  [bold]codebuddy plugin marketplace list[/bold]   "
-        "[dim]# 应能看到 ai-rd-team[/dim]\n"
+        "\n[bold]方式 1：从 GitHub 安装（推荐，最简单，已真机验证）[/bold]\n"
+        "  [bold]codebuddy plugin marketplace add "
+        "https://github.com/eyjian/ai-rd-team.git[/bold]\n"
         "  [bold]codebuddy plugin install ai-rd-team@ai-rd-team[/bold]\n"
-        "  [dim]# 重启 CodeBuddy IDE，在「插件市场」面板里应能看到 ai-rd-team[/dim]\n"
-        "  [dim]# 点「安装」可选 用户 / 项目 / 本地 三种范围[/dim]\n"
-        "\n[bold]备用：直接拷到用户级 Skill 目录（跳过 marketplace 机制）[/bold]\n"
+        "  [dim]# 重启 CodeBuddy IDE，插件市场面板会出现 ai-rd-team[/dim]\n"
+        "  [dim]# 无需 git clone，CodeBuddy 会自动拉取 + 管理更新[/dim]\n"
+        "\n[bold]方式 2：从本地路径安装（适合二次开发 / 离线使用）[/bold]\n"
+        f"  [bold]codebuddy plugin marketplace add {path}[/bold]\n"
+        "  [bold]codebuddy plugin install ai-rd-team@ai-rd-team[/bold]\n"
+        "  [dim]# 本地代码变更即时生效（无需 marketplace update）[/dim]\n"
+        "\n[bold]方式 3：直接拷到用户级 Skill 目录（备用，跳过 marketplace）[/bold]\n"
         "  [bold]mkdir -p ~/.codebuddy/skills/[/bold]\n"
         f"  [bold]cp -r {skills_root}/* ~/.codebuddy/skills/[/bold]\n"
-        "  [dim]# 重启 IDE 即可用，但失去插件级管理（安装范围 / 版本 / 卸载）能力[/dim]\n"
-        "\n[dim]详见 docs/01-getting-started.md § 第 2 步。[/dim]"
+        "  [dim]# 失去插件级管理（范围 / 版本 / 卸载）能力[/dim]\n"
+        "\n[dim]三种方式都需要重启 CodeBuddy IDE 生效。"
+        "详见 docs/01-getting-started.md § 第 2 步。[/dim]"
     )
 
 

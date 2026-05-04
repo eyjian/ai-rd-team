@@ -67,42 +67,64 @@ ai-rd-team 是"嵌入 CodeBuddy 的 Python 引擎"。主 Agent 需要两个 Skil
 - `ai-rd-team-launcher` — 入口引导（用户说"启动 ai-rd-team"时激活）
 - `ai-rd-team-bridge` — Bridge 监听（Python 引擎产生 intent 时应答）
 
-仓库本身就是一个**标准 CodeBuddy marketplace**（含 `.codebuddy-plugin/marketplace.json` + `plugins/ai-rd-team/skills/<name>/SKILL.md`，与 `codebuddy-plugins-official` / `superpowers-marketplace` 结构一致）。
+仓库本身就是一个**标准 CodeBuddy marketplace**（含 `.codebuddy-plugin/marketplace.json` + `plugins/ai-rd-team/skills/<name>/SKILL.md`，与 `codebuddy-plugins-official` / `superpowers-marketplace` 结构一致）。三种安装方式，**推荐方式 1**。
 
-### 方式 1：通过 CodeBuddy CLI 注册 Marketplace（推荐，已真机验证）
+### 方式 1：从 GitHub 安装（推荐，最简单）
+
+**已真机验证**：CodeBuddy CLI 原生支持 Git URL 作为 marketplace 来源，会自动 clone + 管理版本。
 
 ```bash
-# 1. 先看 ai-rd-team 的 marketplace 根路径（下面命令会用到）
-ai-rd-team skills
-# 输出示例：ai-rd-team CodeBuddy Marketplace 根：/path/to/ai-rd-team
+# 1. 注册 marketplace（无需先 pip install ai-rd-team）
+codebuddy plugin marketplace add https://github.com/eyjian/ai-rd-team.git
 
-# 2. 把这个目录注册为 CodeBuddy marketplace
-codebuddy plugin marketplace add /path/to/ai-rd-team
-
-# 3. 确认注册成功
-codebuddy plugin marketplace list
-# 应该能看到 ai-rd-team
-
-# 4. 安装 plugin
+# 2. 安装 plugin
 codebuddy plugin install ai-rd-team@ai-rd-team
 
-# 5. 重启 CodeBuddy IDE
+# 3. 重启 CodeBuddy IDE
 ```
 
-重启后，打开 IDE 右侧「插件」面板 → 看到 `ai-rd-team` 市场，里面 `ai-rd-team` 插件。若点「安装」还会弹三种范围：
+**验证**：
+
+```bash
+codebuddy plugin marketplace list   # 应能看到 ai-rd-team（type: github）
+```
+
+重启 IDE 后，「插件」面板 → 看到 `ai-rd-team` 市场 + `ai-rd-team` 插件 + 两个 Skill。点「安装」可选三种安装范围：
 
 - **为您安装（用户范围）** — 仅本人，跨所有项目可用（**一般选这个**）
 - **为此仓库所有协作者安装（项目范围）** — 和协作者共享（进 git）
 - **仅为您在此仓库安装（本地范围）** — 仅本人在此项目可用
 
-装完后在任意 CodeBuddy 会话里说「启动 ai-rd-team 做 xxx」即激活。
+> 💡 **要更新**：
+>
+> ```bash
+> codebuddy plugin marketplace update ai-rd-team
+> ```
+>
+> CodeBuddy 会自动 `git pull` 最新版本。不需要你手动 clone。
 
-> 💡 为什么推荐方式 1：
-> - **代码更新即生效**：marketplace 直接指向 git 仓库，`git pull` 后 `codebuddy plugin marketplace update ai-rd-team` 即可升级
-> - **CodeBuddy 原生管理**：卸载 / 禁用 / 版本切换 / 三种安装范围都可用
-> - **已在真机跑通**：`codebuddy plugin marketplace add` 命令输出 `✔ Marketplace 'ai-rd-team' added successfully`
+### 方式 2：从本地路径安装（适合二次开发 / 离线使用）
 
-### 方式 2：直接拷到用户级 Skill 目录（备用）
+如果你 clone 了仓库要本地改代码调试，用这个：
+
+```bash
+git clone https://github.com/eyjian/ai-rd-team.git
+cd ai-rd-team
+
+# 注册本地路径为 marketplace
+codebuddy plugin marketplace add "$(pwd)"
+
+# 安装 plugin
+codebuddy plugin install ai-rd-team@ai-rd-team
+
+# 重启 CodeBuddy IDE
+```
+
+**优势**：本地代码改动立即生效，不需要 `marketplace update`。
+
+> 💡 `ai-rd-team skills` 命令（需要先 `pip install .`）会帮你打印完整的安装命令，包括本机的实际路径。
+
+### 方式 3：直接拷到用户级 Skill 目录（备用）
 
 如果 CLI 不可用（老版本 CodeBuddy），或你只想快速试一下：
 
@@ -302,21 +324,24 @@ bookmark list
 
 ---
 
-## 🚀 最短路径（5 步一口气跑通）
+## 🚀 最短路径（一口气跑通）
 
 ```bash
-# 1. 克隆 + 装
-git clone https://github.com/eyjian/ai-rd-team.git && cd ai-rd-team && pip install .
+# 1. 装 Python 包（二选一）
+pip install git+https://github.com/eyjian/ai-rd-team.git   # 从 GitHub
+# 或 git clone https://github.com/eyjian/ai-rd-team.git && cd ai-rd-team && pip install .
 
-# 2. 注册为 CodeBuddy marketplace + 装 plugin
-codebuddy plugin marketplace add $(python3 -c "import ai_rd_team; print(ai_rd_team.codebuddy_marketplace_dir())")
+# 2. 注册 Skill 到 CodeBuddy（无需 clone，直接走 GitHub URL）
+codebuddy plugin marketplace add https://github.com/eyjian/ai-rd-team.git
 codebuddy plugin install ai-rd-team@ai-rd-team
-# ↓ 重启 CodeBuddy IDE → 插件面板会出现 ai-rd-team
+# ↓ 重启 CodeBuddy IDE
 
-# 3. 准备工作区
-cp -r examples/01-smart-bookmark ~/try && cd ~/try
+# 3. 准备工作区（以 01-smart-bookmark 为例）
+mkdir ~/try && cd ~/try
+curl -o REQUIREMENT.md https://raw.githubusercontent.com/eyjian/ai-rd-team/main/examples/01-smart-bookmark/REQUIREMENT.md
+# 或从你 clone 的仓库里 cp -r examples/01-smart-bookmark ~/try
 
-# 4. 开面板
+# 4. 开面板（可选）
 ai-rd-team serve --port 8765 &
 
 # 5. 在 CodeBuddy 里打开 ~/try，对话框输入：

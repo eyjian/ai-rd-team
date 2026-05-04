@@ -32,15 +32,15 @@ M6 修复把项目结构改成与 `codebuddy-plugins-official` / `obra_superpowe
 ## 怎么用新结构安装
 
 ```bash
-ai-rd-team skills   # 工具会告诉你 marketplace 根路径 + 安装命令
+ai-rd-team skills   # 工具会告诉你 3 种安装命令
 ```
 
-**推荐命令**（已真机验证）：
+**最简路径**（已真机验证）：
 
 ```bash
-codebuddy plugin marketplace add /path/to/ai-rd-team
+codebuddy plugin marketplace add https://github.com/eyjian/ai-rd-team.git
 codebuddy plugin install ai-rd-team@ai-rd-team
-# 然后重启 CodeBuddy IDE
+# 重启 CodeBuddy IDE
 ```
 
 详见：

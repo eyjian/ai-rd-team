@@ -1,7 +1,7 @@
 # NEXT — 下次工作时从这里开始
 
 > **用途**：session 交接的单一入口。下次任何人（或 AI session）继续这个项目时，**第一件事就是读这份文档**。
-> **最后更新**：2026-05-04 21:05（M6 marketplace 安装命令真机验证后）
+> **最后更新**：2026-05-04 21:30（marketplace 三种安装方式全部真机验证后）
 > **当前版本**：`0.1.0b1` beta（本地可装，**未发 PyPI**）
 > **仓库状态**：`main` 分支 clean，已同步 origin
 
@@ -33,7 +33,7 @@ ls docs/follow-ups/ 2>/dev/null         # 阻塞的 follow-up
 | 正式 spec | `adapter-bridge-auto-responder`（M5 归档产物） |
 | PyPI | ❌ 未发布（用户决定暂缓，先手工安装） |
 | 本地产物 | `dist/ai_rd_team-0.1.0b1-{.whl,.tar.gz}`（git 忽略，**M6 后需重建**因为结构变了） |
-| CodeBuddy marketplace | ✅ 已规范化（`.codebuddy-plugin/marketplace.json` + `plugins/ai-rd-team/skills/*/SKILL.md`） |
+| CodeBuddy marketplace | ✅ 已规范化（`.codebuddy-plugin/marketplace.json` + `plugins/ai-rd-team/skills/*/SKILL.md`），**3 种安装方式都真机验证**（GitHub URL / 本地路径 / 直接拷 skill） |
 
 ---
 

@@ -142,17 +142,16 @@ ai-rd-team run "做一个带 JWT 登录的 TodoList API"
 
 ### 方式 C：作为 CodeBuddy Skill 触发（推荐）
 
-ai-rd-team 仓库本身就是一个 **CodeBuddy marketplace**（含 `.codebuddy-plugin/marketplace.json` + `plugins/ai-rd-team/`）。通过 CodeBuddy CLI 注册 + 安装（**已真机验证**）：
+ai-rd-team 仓库本身就是一个 **CodeBuddy marketplace**（含 `.codebuddy-plugin/marketplace.json` + `plugins/ai-rd-team/`）。
+
+**最简路径（从 GitHub 装，真机已验证）**：
 
 ```bash
-# 1. 看 ai-rd-team 的 marketplace 根路径
-ai-rd-team skills
-
-# 2. 注册 marketplace → 安装 plugin
-codebuddy plugin marketplace add /path/to/ai-rd-team
+# 无需先 git clone，CodeBuddy 会自动拉取
+codebuddy plugin marketplace add https://github.com/eyjian/ai-rd-team.git
 codebuddy plugin install ai-rd-team@ai-rd-team
 
-# 3. 重启 CodeBuddy IDE → 插件面板会出现 ai-rd-team → 点「安装」选范围
+# 重启 CodeBuddy IDE → 插件面板会出现 ai-rd-team → 点「安装」选范围
 ```
 
 然后在 CodeBuddy 会话中：
@@ -160,7 +159,16 @@ codebuddy plugin install ai-rd-team@ai-rd-team
 你：用 ai-rd-team 做一个 TodoList 小程序
 ```
 
-详细步骤（3 种安装范围对比、备用拷贝方式、常见坑、验证）见 [docs/01-getting-started.md § 第 2 步](docs/01-getting-started.md#第-2-步把-skill-安装到-codebuddy只做一次)。
+**二次开发 / 离线版本**（先 clone 再从本地路径装）：
+
+```bash
+git clone https://github.com/eyjian/ai-rd-team.git
+cd ai-rd-team
+codebuddy plugin marketplace add "$(pwd)"
+codebuddy plugin install ai-rd-team@ai-rd-team
+```
+
+详细步骤（3 种安装方式、3 种范围对比、常见坑、验证命令）见 [docs/01-getting-started.md § 第 2 步](docs/01-getting-started.md#第-2-步把-skill-安装到-codebuddy只做一次)。
 
 ---
 

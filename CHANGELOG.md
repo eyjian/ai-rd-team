@@ -13,9 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - 原结构（错误）：`<repo>/skills/ai-rd-team-launcher.md`（单文件 + YAML frontmatter）
   - 新结构（标准）：`<repo>/.codebuddy-plugin/marketplace.json` + `<repo>/plugins/ai-rd-team/.codebuddy-plugin/plugin.json` + `<repo>/plugins/ai-rd-team/skills/ai-rd-team-launcher/SKILL.md`（与 `codebuddy-plugins-official` / `obra_superpowers-marketplace` 完全一致）
 - `src/ai_rd_team/__init__.py` 新增 `codebuddy_marketplace_dir()`（返回 marketplace 根）；`skills_dir()` 保留作为向后兼容别名，转发到新函数。
-- `src/ai_rd_team/cli/main.py::skills` 输出重写，提供两种安装路径：
-  - **方式 1（推荐）**：`codebuddy plugin marketplace add <path>` + `codebuddy plugin install ai-rd-team@ai-rd-team`（**已真机验证**，CodeBuddy CLI 官方支持的本地 marketplace 注册流程）
-  - **方式 2（备用）**：`cp -r plugins/ai-rd-team/skills/* ~/.codebuddy/skills/`（绕开 marketplace）
+- `src/ai_rd_team/cli/main.py::skills` 输出重写，提供三种安装路径：
+  - **方式 1（最推荐）**：`codebuddy plugin marketplace add https://github.com/eyjian/ai-rd-team.git`（从 GitHub，无需 clone）
+  - **方式 2（二次开发）**：`codebuddy plugin marketplace add <本地路径>`（本地代码变更即时生效）
+  - **方式 3（备用）**：`cp -r plugins/ai-rd-team/skills/* ~/.codebuddy/skills/`（跳过 marketplace）
+  - 两种 marketplace 方式均已在真机验证：`codebuddy plugin marketplace add` 成功注册，IDE 插件面板重启后出现 ai-rd-team。
 - 安装方式支持 CodeBuddy 插件面板的三种范围：用户 / 项目 / 本地。
 - `pyproject.toml` 的 `[tool.hatch.build.targets.sdist].include` 补 `plugins` 和 `.codebuddy-plugin`，确保 sdist 带新结构。
 - 文档同步：`docs/01-getting-started.md § 第 2 步`、`README.md § 方式 C`、`skills/README.md`（改为迁移说明页）全部重写。
