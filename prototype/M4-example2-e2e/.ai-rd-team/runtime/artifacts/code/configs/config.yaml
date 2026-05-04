@@ -1,15 +1,18 @@
 server:
   http:
+    network: "tcp"
     addr: "0.0.0.0:8000"
-    timeout: "10s"
+    timeout: 10s
   grpc:
+    network: "tcp"
     addr: "0.0.0.0:9000"
-    timeout: "10s"
+    timeout: 10s
+
 data:
   database:
     driver: "postgres"
-    source: "postgres://blog:blog@localhost:5432/blog?sslmode=disable"
-  log_level: "info"
+    source: "host=localhost port=5432 user=blog password=blog dbname=blog sslmode=disable"
+
 auth:
   jwt_secret: "change-me-in-prod"
-  access_ttl: "168h"
+  expire: 24h

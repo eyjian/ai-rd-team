@@ -1,60 +1,14 @@
-// Code hand-written by architect (minimal subset of protoc-gen-go output).
-// Source: user.proto
-
+// Code equivalent to protoc-gen-go + protoc-gen-go-http output (hand-written for prototype).
 package v1
 
 import (
-	context "context"
+	"context"
 
-	"google.golang.org/protobuf/reflect/protoreflect"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	"github.com/go-kratos/kratos/v2/transport/http"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// ----------------------------- Messages ------------------------------------
-
-type User struct {
-	Id        int64                  `json:"id,omitempty"`
-	Email     string                 `json:"email,omitempty"`
-	Nickname  string                 `json:"nickname,omitempty"`
-	CreatedAt *timestamppb.Timestamp `json:"created_at,omitempty"`
-	UpdatedAt *timestamppb.Timestamp `json:"updated_at,omitempty"`
-}
-
-func (m *User) Reset()                          { *m = User{} }
-func (m *User) String() string                  { return "User" }
-func (*User) ProtoMessage()                     {}
-func (m *User) ProtoReflect() protoreflect.Message { return nil }
-
-func (m *User) GetId() int64 {
-	if m == nil {
-		return 0
-	}
-	return m.Id
-}
-func (m *User) GetEmail() string {
-	if m == nil {
-		return ""
-	}
-	return m.Email
-}
-func (m *User) GetNickname() string {
-	if m == nil {
-		return ""
-	}
-	return m.Nickname
-}
-func (m *User) GetCreatedAt() *timestamppb.Timestamp {
-	if m == nil {
-		return nil
-	}
-	return m.CreatedAt
-}
-func (m *User) GetUpdatedAt() *timestamppb.Timestamp {
-	if m == nil {
-		return nil
-	}
-	return m.UpdatedAt
-}
+// --- Messages ---
 
 type RegisterRequest struct {
 	Email    string `json:"email,omitempty"`
@@ -62,101 +16,108 @@ type RegisterRequest struct {
 	Nickname string `json:"nickname,omitempty"`
 }
 
-func (m *RegisterRequest) Reset()                          { *m = RegisterRequest{} }
-func (m *RegisterRequest) String() string                  { return "RegisterRequest" }
-func (*RegisterRequest) ProtoMessage()                     {}
-func (m *RegisterRequest) ProtoReflect() protoreflect.Message { return nil }
-
-func (m *RegisterRequest) GetEmail() string {
-	if m == nil {
-		return ""
-	}
-	return m.Email
-}
-func (m *RegisterRequest) GetPassword() string {
-	if m == nil {
-		return ""
-	}
-	return m.Password
-}
-func (m *RegisterRequest) GetNickname() string {
-	if m == nil {
-		return ""
-	}
-	return m.Nickname
-}
-
 type LoginRequest struct {
 	Email    string `json:"email,omitempty"`
 	Password string `json:"password,omitempty"`
 }
 
-func (m *LoginRequest) Reset()                          { *m = LoginRequest{} }
-func (m *LoginRequest) String() string                  { return "LoginRequest" }
-func (*LoginRequest) ProtoMessage()                     {}
-func (m *LoginRequest) ProtoReflect() protoreflect.Message { return nil }
-
-func (m *LoginRequest) GetEmail() string {
-	if m == nil {
-		return ""
-	}
-	return m.Email
-}
-func (m *LoginRequest) GetPassword() string {
-	if m == nil {
-		return ""
-	}
-	return m.Password
-}
-
 type LoginReply struct {
-	Token string `json:"token,omitempty"`
-	User  *User  `json:"user,omitempty"`
-}
-
-func (m *LoginReply) Reset()                          { *m = LoginReply{} }
-func (m *LoginReply) String() string                  { return "LoginReply" }
-func (*LoginReply) ProtoMessage()                     {}
-func (m *LoginReply) ProtoReflect() protoreflect.Message { return nil }
-
-func (m *LoginReply) GetToken() string {
-	if m == nil {
-		return ""
-	}
-	return m.Token
-}
-func (m *LoginReply) GetUser() *User {
-	if m == nil {
-		return nil
-	}
-	return m.User
+	Token string     `json:"token,omitempty"`
+	User  *UserReply `json:"user,omitempty"`
 }
 
 type GetMeRequest struct{}
 
-func (m *GetMeRequest) Reset()                          { *m = GetMeRequest{} }
-func (m *GetMeRequest) String() string                  { return "GetMeRequest" }
-func (*GetMeRequest) ProtoMessage()                     {}
-func (m *GetMeRequest) ProtoReflect() protoreflect.Message { return nil }
-
-// ----------------------------- Service -------------------------------------
-
-// UserServiceServer is the interface implemented by internal/service.UserService.
-type UserServiceServer interface {
-	Register(ctx context.Context, req *RegisterRequest) (*User, error)
-	Login(ctx context.Context, req *LoginRequest) (*LoginReply, error)
-	GetMe(ctx context.Context, req *GetMeRequest) (*User, error)
+type UserReply struct {
+	Id        int64                  `json:"id,omitempty"`
+	Email     string                 `json:"email,omitempty"`
+	Nickname  string                 `json:"nickname,omitempty"`
+	CreatedAt *timestamppb.Timestamp `json:"created_at,omitempty"`
 }
 
-// UnimplementedUserServiceServer can be embedded for forward compatibility.
-type UnimplementedUserServiceServer struct{}
+// --- Service interface ---
 
-func (UnimplementedUserServiceServer) Register(context.Context, *RegisterRequest) (*User, error) {
-	return nil, errNotImpl("Register")
+type UserServer interface {
+	Register(context.Context, *RegisterRequest) (*UserReply, error)
+	Login(context.Context, *LoginRequest) (*LoginReply, error)
+	GetMe(context.Context, *GetMeRequest) (*UserReply, error)
 }
-func (UnimplementedUserServiceServer) Login(context.Context, *LoginRequest) (*LoginReply, error) {
-	return nil, errNotImpl("Login")
+
+type UnimplementedUserServer struct{}
+
+func (UnimplementedUserServer) Register(context.Context, *RegisterRequest) (*UserReply, error) {
+	return nil, ErrorInternalError("method Register not implemented")
 }
-func (UnimplementedUserServiceServer) GetMe(context.Context, *GetMeRequest) (*User, error) {
-	return nil, errNotImpl("GetMe")
+func (UnimplementedUserServer) Login(context.Context, *LoginRequest) (*LoginReply, error) {
+	return nil, ErrorInternalError("method Login not implemented")
+}
+func (UnimplementedUserServer) GetMe(context.Context, *GetMeRequest) (*UserReply, error) {
+	return nil, ErrorInternalError("method GetMe not implemented")
+}
+
+// --- HTTP registration ---
+
+const OperationUserRegister = "/blog.v1.User/Register"
+const OperationUserLogin = "/blog.v1.User/Login"
+const OperationUserGetMe = "/blog.v1.User/GetMe"
+
+func RegisterUserHTTPServer(s *http.Server, srv UserServer) {
+	r := s.Route("/")
+	r.POST("/v1/users", _User_Register0_HTTP_Handler(srv))
+	r.POST("/v1/auth/login", _User_Login0_HTTP_Handler(srv))
+	r.GET("/v1/users/me", _User_GetMe0_HTTP_Handler(srv))
+}
+
+func _User_Register0_HTTP_Handler(srv UserServer) func(http.Context) error {
+	return func(ctx http.Context) error {
+		var in RegisterRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserRegister)
+		h := ctx.Middleware(func(c context.Context, req any) (any, error) {
+			return srv.Register(c, req.(*RegisterRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply, _ := out.(*UserReply)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _User_Login0_HTTP_Handler(srv UserServer) func(http.Context) error {
+	return func(ctx http.Context) error {
+		var in LoginRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationUserLogin)
+		h := ctx.Middleware(func(c context.Context, req any) (any, error) {
+			return srv.Login(c, req.(*LoginRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply, _ := out.(*LoginReply)
+		return ctx.Result(200, reply)
+	}
+}
+
+func _User_GetMe0_HTTP_Handler(srv UserServer) func(http.Context) error {
+	return func(ctx http.Context) error {
+		var in GetMeRequest
+		http.SetOperation(ctx, OperationUserGetMe)
+		h := ctx.Middleware(func(c context.Context, req any) (any, error) {
+			return srv.GetMe(c, req.(*GetMeRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		reply, _ := out.(*UserReply)
+		return ctx.Result(200, reply)
+	}
 }

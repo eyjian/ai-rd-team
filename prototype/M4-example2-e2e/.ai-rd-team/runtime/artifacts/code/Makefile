@@ -1,19 +1,20 @@
-.PHONY: build run test tidy vet clean
+.PHONY: tidy build run test clean
 
-build:
-	go build -o bin/server ./cmd/server
-
-run:
-	go run ./cmd/server -conf configs/config.yaml
-
-test:
-	go test ./... -race -cover
+GO ?= go
+BIN ?= bin/server
 
 tidy:
-	go mod tidy
+	$(GO) mod tidy
 
-vet:
-	go vet ./...
+build: tidy
+	mkdir -p bin
+	$(GO) build -o $(BIN) ./cmd/server
+
+run:
+	$(GO) run ./cmd/server -conf ./configs/config.yaml
+
+test:
+	$(GO) test ./...
 
 clean:
-	rm -rf bin/
+	rm -rf bin

@@ -1,24 +1,9 @@
 name: developer_2
 role: developer
-status: done
-current_task: 装配完成；go mod tidy && go build ./... && go vet ./... 全绿；AppFactory 已注册并经 tester 验收
-progress: '100%'
-last_updated: '2026-05-04T15:38:00+08:00'
-produced_files:
-  - artifacts/code/go.mod
-  - artifacts/code/Makefile
-  - artifacts/code/configs/config.yaml
-  - artifacts/code/internal/conf/conf.pb.go
-  - artifacts/code/internal/pkg/auth/auth.go
-  - artifacts/code/internal/server/server.go
-  - artifacts/code/internal/server/http.go
-  - artifacts/code/internal/server/grpc.go
-  - artifacts/code/internal/service/service.go
-  - artifacts/code/internal/service/user.go
-  - artifacts/code/internal/service/post.go
-  - artifacts/code/internal/service/comment.go
-  - artifacts/code/cmd/server/main.go
-  - artifacts/code/cmd/server/wire.go
-  - artifacts/code/tests/integration/app_factory_real.go
-  - artifacts/reports/report-developer2.md
+status: terminated
+current_task: BlogAPI 装配（go.mod/pb.go/conf/server/service/cmd/wire），等待 architect 的
+  proto 和 dev_1 的 biz 接口落地
+progress: ready; 已了解任务清单与工作目录；等待上游产出
+last_updated: '2026-05-04T09:03:12.138+00:00'
+produced_files: []
 blocking_issues: []

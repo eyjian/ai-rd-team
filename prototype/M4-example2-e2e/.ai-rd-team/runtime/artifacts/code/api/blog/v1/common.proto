@@ -4,8 +4,14 @@ package blog.v1;
 
 option go_package = "blog/api/blog/v1;v1";
 
-// 通用分页请求
+import "google/protobuf/timestamp.proto";
+
+// PageRequest 通用分页
 message PageRequest {
-  int32 page = 1;  // 从 1 起；默认 1
-  int32 size = 2;  // 默认 20，最大 100
+  int32 page = 1;
+  int32 size = 2;
+  string tag = 3;
 }
+
+// Empty 通用空消息
+message Empty {}

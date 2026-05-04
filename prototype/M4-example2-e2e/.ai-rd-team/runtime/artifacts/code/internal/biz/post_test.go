@@ -3,182 +3,190 @@ package biz
 import (
 	"context"
 	"testing"
+	"time"
 
-	kerrors "github.com/go-kratos/kratos/v2/errors"
+	"github.com/go-kratos/kratos/v2/errors"
+	"github.com/go-kratos/kratos/v2/log"
 )
 
-func setupPostUC(t *testing.T) (*PostUsecase, *fakeUserRepo, *fakePostRepo, int64) {
-	t.Helper()
-	ur := newFakeUserRepo()
-	pr := newFakePostRepo()
-	uc := NewPostUsecase(pr, ur, testLogger())
+func newTestPostUsecase(pr PostRepo, lr PostLikeRepo) *PostUsecase {
+	if lr == nil {
+		lr = newMockPostLikeRepo()
+	}
+	return NewPostUsecase(pr, lr, log.DefaultLogger)
+}
 
-	userUC := NewUserUsecase(ur, &stubTokenIssuer{}, testLogger())
-	u, err := userUC.Register(context.Background(), "author@b.com", "secret1", "author")
+func TestPost_Create_Success(t *testing.T) {
+	var captured *Post
+	pr := &mockPostRepo{
+		createFn: func(ctx context.Context, p *Post) (*Post, error) {
+			p.ID = 10
+			p.CreatedAt = time.Now()
+			p.UpdatedAt = p.CreatedAt
+			captured = p
+			return p, nil
+		},
+	}
+	uc := newTestPostUsecase(pr, nil)
+	p, err := uc.Create(context.Background(), 1, " hello ", "body", []string{"go", "", "go", " k "})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unexpected: %v", err)
 	}
-	return uc, ur, pr, u.ID
+	if p.ID != 10 {
+		t.Fatalf("want ID=10, got %d", p.ID)
+	}
+	if captured.Title != "hello" {
+		t.Fatalf("title should be trimmed, got %q", captured.Title)
+	}
+	if len(captured.Tags) != 2 || captured.Tags[0] != "go" || captured.Tags[1] != "k" {
+		t.Fatalf("tags should be normalized+deduped, got %v", captured.Tags)
+	}
 }
 
-func TestPostUsecase_Create_Success(t *testing.T) {
-	uc, _, _, authorID := setupPostUC(t)
-	p, err := uc.Create(context.Background(), authorID, " Hello ", "body", []string{"Go", " go ", "", "web"})
+func TestPost_Create_ValidationFailed(t *testing.T) {
+	uc := newTestPostUsecase(&mockPostRepo{}, nil)
+	_, err := uc.Create(context.Background(), 1, "   ", "body", nil)
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+	if errors.FromError(err).Reason != "VALIDATION_FAILED" {
+		t.Fatalf("want VALIDATION_FAILED, got %q", errors.FromError(err).Reason)
+	}
+}
+
+func TestPost_List_TagFilter(t *testing.T) {
+	var gotTag string
+	pr := &mockPostRepo{
+		listFn: func(ctx context.Context, page, size int32, tag string) ([]*Post, int64, error) {
+			gotTag = tag
+			return []*Post{{ID: 1}}, 1, nil
+		},
+	}
+	uc := newTestPostUsecase(pr, nil)
+	posts, total, err := uc.List(context.Background(), 0, 0, " go ")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unexpected: %v", err)
 	}
-	if p.Title != "Hello" {
-		t.Fatalf("title not trimmed, got %q", p.Title)
+	if total != 1 || len(posts) != 1 {
+		t.Fatalf("want 1 post, got total=%d len=%d", total, len(posts))
 	}
-	if len(p.Tags) != 2 || p.Tags[0] != "go" || p.Tags[1] != "web" {
-		t.Fatalf("tags not normalized: %v", p.Tags)
-	}
-}
-
-func TestPostUsecase_Create_Validation(t *testing.T) {
-	uc, _, _, authorID := setupPostUC(t)
-	_, err := uc.Create(context.Background(), authorID, "", "body", nil)
-	if err == nil || kerrors.Reason(err) != "VALIDATION_FAILED" {
-		t.Fatalf("expected VALIDATION_FAILED for empty title, got %v", err)
-	}
-	_, err = uc.Create(context.Background(), authorID, "t", "", nil)
-	if err == nil || kerrors.Reason(err) != "VALIDATION_FAILED" {
-		t.Fatalf("expected VALIDATION_FAILED for empty body, got %v", err)
+	if gotTag != "go" {
+		t.Fatalf("tag should be trimmed, got %q", gotTag)
 	}
 }
 
-func TestPostUsecase_Create_AuthorMissing(t *testing.T) {
-	uc, _, _, _ := setupPostUC(t)
-	_, err := uc.Create(context.Background(), 9999, "t", "b", nil)
-	if err == nil || kerrors.Reason(err) != "USER_NOT_FOUND" {
-		t.Fatalf("expected USER_NOT_FOUND, got %v", err)
+func TestPost_Update_NonAuthorForbidden(t *testing.T) {
+	pr := &mockPostRepo{
+		getByIDFn: func(ctx context.Context, id int64) (*Post, error) {
+			return &Post{ID: id, AuthorID: 1, Title: "t"}, nil
+		},
+	}
+	uc := newTestPostUsecase(pr, nil)
+	_, err := uc.Update(context.Background(), 2, 100, "new-title", "body", nil)
+	if err == nil {
+		t.Fatal("expected forbidden")
+	}
+	if errors.FromError(err).Reason != "POST_FORBIDDEN" {
+		t.Fatalf("want POST_FORBIDDEN, got %q", errors.FromError(err).Reason)
 	}
 }
 
-func TestPostUsecase_Get_NotFound(t *testing.T) {
-	uc, _, _, _ := setupPostUC(t)
-	_, err := uc.Get(context.Background(), 9999)
-	if err == nil || kerrors.Reason(err) != "POST_NOT_FOUND" {
-		t.Fatalf("expected POST_NOT_FOUND, got %v", err)
+func TestPost_Update_NotFound(t *testing.T) {
+	pr := &mockPostRepo{
+		getByIDFn: func(ctx context.Context, id int64) (*Post, error) {
+			return nil, ErrPostNotFound
+		},
+	}
+	uc := newTestPostUsecase(pr, nil)
+	_, err := uc.Update(context.Background(), 1, 100, "t", "b", nil)
+	if err == nil {
+		t.Fatal("expected not found")
+	}
+	if errors.FromError(err).Reason != "POST_NOT_FOUND" {
+		t.Fatalf("want POST_NOT_FOUND, got %q", errors.FromError(err).Reason)
 	}
 }
 
-func TestPostUsecase_Update_ForbiddenForNonAuthor(t *testing.T) {
-	uc, ur, _, authorID := setupPostUC(t)
-	p, err := uc.Create(context.Background(), authorID, "t", "b", nil)
-	if err != nil {
-		t.Fatal(err)
+func TestPost_Delete_AuthorSuccess(t *testing.T) {
+	deleted := false
+	pr := &mockPostRepo{
+		getByIDFn: func(ctx context.Context, id int64) (*Post, error) {
+			return &Post{ID: id, AuthorID: 1}, nil
+		},
+		deleteFn: func(ctx context.Context, id int64) error {
+			deleted = true
+			return nil
+		},
 	}
-	// 造一个另一个用户
-	other, err := ur.Create(context.Background(), &User{Email: "other@b.com", PasswordHash: "x", Nickname: "o"})
-	if err != nil {
-		t.Fatal(err)
+	uc := newTestPostUsecase(pr, nil)
+	if err := uc.Delete(context.Background(), 1, 100); err != nil {
+		t.Fatalf("unexpected: %v", err)
 	}
-
-	_, err = uc.Update(context.Background(), other.ID, p.ID, "t2", "b2", []string{"t"})
-	if err == nil || kerrors.Reason(err) != "FORBIDDEN" {
-		t.Fatalf("expected FORBIDDEN, got %v", err)
-	}
-}
-
-func TestPostUsecase_Update_SuccessByAuthor(t *testing.T) {
-	uc, _, _, authorID := setupPostUC(t)
-	p, err := uc.Create(context.Background(), authorID, "t", "b", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	updated, err := uc.Update(context.Background(), authorID, p.ID, "t2", "b2", []string{"Go"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if updated.Title != "t2" || updated.BodyMarkdown != "b2" || len(updated.Tags) != 1 || updated.Tags[0] != "go" {
-		t.Fatalf("update mismatch: %+v", updated)
+	if !deleted {
+		t.Fatal("Delete should be called")
 	}
 }
 
-func TestPostUsecase_Delete_NonAuthor(t *testing.T) {
-	uc, ur, _, authorID := setupPostUC(t)
-	p, err := uc.Create(context.Background(), authorID, "t", "b", nil)
-	if err != nil {
-		t.Fatal(err)
+// TestPost_Like_Idempotent 点赞幂等：连续 Add 两次只 +1。
+func TestPost_Like_Idempotent(t *testing.T) {
+	pr := &mockPostRepo{
+		getByIDFn: func(ctx context.Context, id int64) (*Post, error) {
+			return &Post{ID: id, AuthorID: 9}, nil
+		},
 	}
-	other, _ := ur.Create(context.Background(), &User{Email: "x@x.com", PasswordHash: "x", Nickname: "x"})
-	if err := uc.Delete(context.Background(), other.ID, p.ID); err == nil || kerrors.Reason(err) != "FORBIDDEN" {
-		t.Fatalf("expected FORBIDDEN, got %v", err)
+	lr := newMockPostLikeRepo()
+	uc := newTestPostUsecase(pr, lr)
+
+	if err := uc.Like(context.Background(), 100, 1); err != nil {
+		t.Fatalf("first like: %v", err)
+	}
+	if err := uc.Like(context.Background(), 100, 1); err != nil {
+		t.Fatalf("second like: %v", err)
+	}
+	if len(lr.likes) != 1 {
+		t.Fatalf("want 1 like record (idempotent), got %d", len(lr.likes))
 	}
 }
 
-func TestPostUsecase_Delete_Success(t *testing.T) {
-	uc, _, _, authorID := setupPostUC(t)
-	p, err := uc.Create(context.Background(), authorID, "t", "b", nil)
-	if err != nil {
-		t.Fatal(err)
+// TestPost_Unlike_Idempotent 取消点赞幂等：未点过赞也不报错。
+func TestPost_Unlike_Idempotent(t *testing.T) {
+	pr := &mockPostRepo{
+		getByIDFn: func(ctx context.Context, id int64) (*Post, error) {
+			return &Post{ID: id}, nil
+		},
 	}
-	if err := uc.Delete(context.Background(), authorID, p.ID); err != nil {
-		t.Fatal(err)
+	lr := newMockPostLikeRepo()
+	uc := newTestPostUsecase(pr, lr)
+	// 未点过也不应报错
+	if err := uc.Unlike(context.Background(), 100, 1); err != nil {
+		t.Fatalf("unlike on non-existing: %v", err)
 	}
-	if _, err := uc.Get(context.Background(), p.ID); err == nil || kerrors.Reason(err) != "POST_NOT_FOUND" {
-		t.Fatalf("expected POST_NOT_FOUND after delete, got %v", err)
+	// 点一次再取消
+	_ = uc.Like(context.Background(), 100, 1)
+	if err := uc.Unlike(context.Background(), 100, 1); err != nil {
+		t.Fatalf("unlike existing: %v", err)
 	}
-}
-
-func TestPostUsecase_List_Paging(t *testing.T) {
-	uc, _, _, authorID := setupPostUC(t)
-	for i := 0; i < 3; i++ {
-		if _, err := uc.Create(context.Background(), authorID, "t", "b", []string{"go"}); err != nil {
-			t.Fatal(err)
-		}
+	// 再取消仍然无错
+	if err := uc.Unlike(context.Background(), 100, 1); err != nil {
+		t.Fatalf("double unlike: %v", err)
 	}
-	items, total, err := uc.List(context.Background(), 1, 2, "go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if total != 3 {
-		t.Fatalf("total=%d", total)
-	}
-	if len(items) != 2 {
-		t.Fatalf("page size=%d", len(items))
+	if len(lr.likes) != 0 {
+		t.Fatalf("want 0 likes, got %d", len(lr.likes))
 	}
 }
 
-func TestPostUsecase_Like_Idempotent(t *testing.T) {
-	uc, _, _, authorID := setupPostUC(t)
-	p, err := uc.Create(context.Background(), authorID, "t", "b", nil)
-	if err != nil {
-		t.Fatal(err)
+func TestPost_Like_PostNotFound(t *testing.T) {
+	pr := &mockPostRepo{
+		getByIDFn: func(ctx context.Context, id int64) (*Post, error) {
+			return nil, ErrPostNotFound
+		},
 	}
-
-	if err := uc.Like(context.Background(), p.ID, 42); err != nil {
-		t.Fatal(err)
+	uc := newTestPostUsecase(pr, newMockPostLikeRepo())
+	err := uc.Like(context.Background(), 1, 1)
+	if err == nil {
+		t.Fatal("expected POST_NOT_FOUND")
 	}
-	// 再点一次不应报错
-	if err := uc.Like(context.Background(), p.ID, 42); err != nil {
-		t.Fatal(err)
-	}
-	got, _ := uc.Get(context.Background(), p.ID)
-	if got.LikesCount != 1 {
-		t.Fatalf("likes_count=%d, want 1 (idempotent)", got.LikesCount)
-	}
-
-	// unlike 幂等
-	if err := uc.Unlike(context.Background(), p.ID, 42); err != nil {
-		t.Fatal(err)
-	}
-	if err := uc.Unlike(context.Background(), p.ID, 42); err != nil {
-		t.Fatal(err)
-	}
-	got, _ = uc.Get(context.Background(), p.ID)
-	if got.LikesCount != 0 {
-		t.Fatalf("likes_count=%d, want 0", got.LikesCount)
-	}
-}
-
-func TestPostUsecase_Like_PostMissing(t *testing.T) {
-	uc, _, _, _ := setupPostUC(t)
-	if err := uc.Like(context.Background(), 9999, 1); err == nil || kerrors.Reason(err) != "POST_NOT_FOUND" {
-		t.Fatalf("expected POST_NOT_FOUND, got %v", err)
-	}
-	if err := uc.Unlike(context.Background(), 9999, 1); err == nil || kerrors.Reason(err) != "POST_NOT_FOUND" {
-		t.Fatalf("expected POST_NOT_FOUND, got %v", err)
+	if errors.FromError(err).Reason != "POST_NOT_FOUND" {
+		t.Fatalf("want POST_NOT_FOUND, got %q", errors.FromError(err).Reason)
 	}
 }

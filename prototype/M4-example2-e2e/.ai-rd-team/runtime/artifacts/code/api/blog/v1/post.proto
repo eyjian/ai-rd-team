@@ -2,74 +2,89 @@ syntax = "proto3";
 
 package blog.v1;
 
+option go_package = "blog/api/blog/v1;v1";
+
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/empty.proto";
 
-option go_package = "blog/api/blog/v1;v1";
-
-service PostService {
-  rpc CreatePost (CreatePostRequest) returns (Post) {
-    option (google.api.http) = { post: "/v1/posts" body: "*" };
+service Post {
+  rpc Create(CreatePostRequest) returns (PostReply) {
+    option (google.api.http) = {
+      post: "/v1/posts"
+      body: "*"
+    };
   }
-  rpc GetPost (GetPostRequest) returns (Post) {
-    option (google.api.http) = { get: "/v1/posts/{id}" };
+  rpc Get(GetPostRequest) returns (PostReply) {
+    option (google.api.http) = {
+      get: "/v1/posts/{id}"
+    };
   }
-  rpc UpdatePost (UpdatePostRequest) returns (Post) {
-    option (google.api.http) = { put: "/v1/posts/{id}" body: "*" };
+  rpc List(ListPostRequest) returns (ListPostReply) {
+    option (google.api.http) = {
+      get: "/v1/posts"
+    };
   }
-  rpc DeletePost (DeletePostRequest) returns (google.protobuf.Empty) {
-    option (google.api.http) = { delete: "/v1/posts/{id}" };
+  rpc Update(UpdatePostRequest) returns (PostReply) {
+    option (google.api.http) = {
+      put: "/v1/posts/{id}"
+      body: "*"
+    };
   }
-  rpc ListPosts (ListPostsRequest) returns (ListPostsReply) {
-    option (google.api.http) = { get: "/v1/posts" };
+  rpc Delete(DeletePostRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/v1/posts/{id}"
+    };
   }
-  rpc LikePost (LikePostRequest) returns (LikePostReply) {
-    option (google.api.http) = { post: "/v1/posts/{id}/like" body: "*" };
+  rpc Like(LikeRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      post: "/v1/posts/{id}/like"
+    };
   }
-  rpc UnlikePost (UnlikePostRequest) returns (LikePostReply) {
-    option (google.api.http) = { delete: "/v1/posts/{id}/like" };
+  rpc Unlike(LikeRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/v1/posts/{id}/like"
+    };
   }
-}
-
-message Post {
-  int64  id           = 1;
-  int64  author_id    = 2;
-  string title        = 3;
-  string body_markdown = 4;
-  repeated string tags = 5;
-  int64  likes_count  = 6;
-  google.protobuf.Timestamp created_at = 7;
-  google.protobuf.Timestamp updated_at = 8;
 }
 
 message CreatePostRequest {
-  string title          = 1;
-  string body_markdown  = 2;
+  string          title = 1;
+  string          body  = 2;
   repeated string tags  = 3;
 }
 
-message GetPostRequest    { int64 id = 1; }
-message DeletePostRequest { int64 id = 1; }
+message GetPostRequest { int64 id = 1; }
 
-message UpdatePostRequest {
-  int64  id             = 1;
-  string title          = 2;
-  string body_markdown  = 3;
-  repeated string tags  = 4;
-}
-
-message ListPostsRequest {
+message ListPostRequest {
   int32  page = 1;
   int32  size = 2;
   string tag  = 3;
 }
 
-message ListPostsReply {
-  repeated Post items = 1;
-  int64         total = 2;
+message ListPostReply {
+  repeated PostReply items = 1;
+  int64              total = 2;
 }
 
-message LikePostRequest   { int64 id = 1; }
-message UnlikePostRequest { int64 id = 1; }
-message LikePostReply     { int64 likes_count = 1; }
+message UpdatePostRequest {
+  int64           id    = 1;
+  string          title = 2;
+  string          body  = 3;
+  repeated string tags  = 4;
+}
+
+message DeletePostRequest { int64 id = 1; }
+
+message LikeRequest { int64 id = 1; }
+
+message PostReply {
+  int64                      id         = 1;
+  int64                      author_id  = 2;
+  string                     title      = 3;
+  string                     body       = 4;
+  repeated string            tags       = 5;
+  int64                      like_count = 6;
+  google.protobuf.Timestamp  created_at = 7;
+  google.protobuf.Timestamp  updated_at = 8;
+}

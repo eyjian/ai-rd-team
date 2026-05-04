@@ -7,119 +7,141 @@ import (
 	"blog/internal/biz"
 	"blog/internal/pkg/auth"
 
+	"github.com/go-kratos/kratos/v2/log"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// PostService adapts v1.PostServiceServer to biz.PostUsecase.
+// PostService 文章协议层
 type PostService struct {
-	v1.UnimplementedPostServiceServer
-	uc *biz.PostUsecase
+	v1.UnimplementedPostServer
+
+	uc  *biz.PostUsecase
+	log *log.Helper
 }
 
-// NewPostService constructor.
-func NewPostService(uc *biz.PostUsecase) *PostService {
-	return &PostService{uc: uc}
+func NewPostService(uc *biz.PostUsecase, logger log.Logger) *PostService {
+	return &PostService{uc: uc, log: log.NewHelper(logger)}
 }
 
-func (s *PostService) CreatePost(ctx context.Context, req *v1.CreatePostRequest) (*v1.Post, error) {
-	uid, ok := auth.UserIDFromContext(ctx)
-	if !ok {
-		return nil, auth.ErrUnauthorized(v1.ReasonUnauthorized)
+func postToReply(p *biz.Post) *v1.PostReply {
+	if p == nil {
+		return nil
 	}
-	p, err := s.uc.Create(ctx, uid, req.GetTitle(), req.GetBodyMarkdown(), req.GetTags())
+	return &v1.PostReply{
+		Id:        p.ID,
+		AuthorId:  p.AuthorID,
+		Title:     p.Title,
+		Body:      p.Body,
+		Tags:      p.Tags,
+		LikeCount: p.LikeCount,
+		CreatedAt: timestamppb.New(p.CreatedAt),
+		UpdatedAt: timestamppb.New(p.UpdatedAt),
+	}
+}
+
+func (s *PostService) Create(ctx context.Context, req *v1.CreatePostRequest) (*v1.PostReply, error) {
+	uid, err := auth.MustUserIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return toPBPost(p), nil
-}
-
-func (s *PostService) GetPost(ctx context.Context, req *v1.GetPostRequest) (*v1.Post, error) {
-	p, err := s.uc.Get(ctx, req.GetId())
+	if req.Title == "" {
+		return nil, v1.ErrorValidationFailed("title required")
+	}
+	p, err := s.uc.Create(ctx, uid, req.Title, req.Body, req.Tags)
 	if err != nil {
 		return nil, err
 	}
-	return toPBPost(p), nil
+	return postToReply(p), nil
 }
 
-func (s *PostService) ListPosts(ctx context.Context, req *v1.ListPostsRequest) (*v1.ListPostsReply, error) {
-	page, size := req.GetPage(), req.GetSize()
-	list, total, err := s.uc.List(ctx, page, size, req.GetTag())
+func (s *PostService) Get(ctx context.Context, req *v1.GetPostRequest) (*v1.PostReply, error) {
+	if req.Id <= 0 {
+		return nil, v1.ErrorValidationFailed("invalid id")
+	}
+	p, err := s.uc.Get(ctx, req.Id)
 	if err != nil {
 		return nil, err
 	}
-	items := make([]*v1.Post, 0, len(list))
+	return postToReply(p), nil
+}
+
+func (s *PostService) List(ctx context.Context, req *v1.ListPostRequest) (*v1.ListPostReply, error) {
+	page := req.Page
+	if page <= 0 {
+		page = 1
+	}
+	size := req.Size
+	if size <= 0 {
+		size = 10
+	}
+	if size > 50 {
+		size = 50
+	}
+	list, total, err := s.uc.List(ctx, page, size, req.Tag)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*v1.PostReply, 0, len(list))
 	for _, p := range list {
-		items = append(items, toPBPost(p))
+		items = append(items, postToReply(p))
 	}
-	return &v1.ListPostsReply{Items: items, Total: total}, nil
+	return &v1.ListPostReply{Items: items, Total: total}, nil
 }
 
-func (s *PostService) UpdatePost(ctx context.Context, req *v1.UpdatePostRequest) (*v1.Post, error) {
-	uid, ok := auth.UserIDFromContext(ctx)
-	if !ok {
-		return nil, auth.ErrUnauthorized(v1.ReasonUnauthorized)
-	}
-	p, err := s.uc.Update(ctx, uid, req.GetId(), req.GetTitle(), req.GetBodyMarkdown(), req.GetTags())
+func (s *PostService) Update(ctx context.Context, req *v1.UpdatePostRequest) (*v1.PostReply, error) {
+	uid, err := auth.MustUserIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return toPBPost(p), nil
+	if req.Id <= 0 {
+		return nil, v1.ErrorValidationFailed("invalid id")
+	}
+	p, err := s.uc.Update(ctx, uid, req.Id, req.Title, req.Body, req.Tags)
+	if err != nil {
+		return nil, err
+	}
+	return postToReply(p), nil
 }
 
-func (s *PostService) DeletePost(ctx context.Context, req *v1.DeletePostRequest) (*emptypb.Empty, error) {
-	uid, ok := auth.UserIDFromContext(ctx)
-	if !ok {
-		return nil, auth.ErrUnauthorized(v1.ReasonUnauthorized)
+func (s *PostService) Delete(ctx context.Context, req *v1.DeletePostRequest) (*emptypb.Empty, error) {
+	uid, err := auth.MustUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
 	}
-	if err := s.uc.Delete(ctx, uid, req.GetId()); err != nil {
+	if req.Id <= 0 {
+		return nil, v1.ErrorValidationFailed("invalid id")
+	}
+	if err := s.uc.Delete(ctx, uid, req.Id); err != nil {
 		return nil, err
 	}
 	return &emptypb.Empty{}, nil
 }
 
-func (s *PostService) LikePost(ctx context.Context, req *v1.LikePostRequest) (*v1.LikePostReply, error) {
-	uid, ok := auth.UserIDFromContext(ctx)
-	if !ok {
-		return nil, auth.ErrUnauthorized(v1.ReasonUnauthorized)
-	}
-	if err := s.uc.Like(ctx, req.GetId(), uid); err != nil {
-		return nil, err
-	}
-	p, err := s.uc.Get(ctx, req.GetId())
+func (s *PostService) Like(ctx context.Context, req *v1.LikeRequest) (*emptypb.Empty, error) {
+	uid, err := auth.MustUserIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &v1.LikePostReply{LikesCount: p.LikesCount}, nil
-}
-
-func (s *PostService) UnlikePost(ctx context.Context, req *v1.UnlikePostRequest) (*v1.LikePostReply, error) {
-	uid, ok := auth.UserIDFromContext(ctx)
-	if !ok {
-		return nil, auth.ErrUnauthorized(v1.ReasonUnauthorized)
+	if req.Id <= 0 {
+		return nil, v1.ErrorValidationFailed("invalid id")
 	}
-	if err := s.uc.Unlike(ctx, req.GetId(), uid); err != nil {
+	if err := s.uc.Like(ctx, req.Id, uid); err != nil {
 		return nil, err
 	}
-	p, err := s.uc.Get(ctx, req.GetId())
+	return &emptypb.Empty{}, nil
+}
+
+func (s *PostService) Unlike(ctx context.Context, req *v1.LikeRequest) (*emptypb.Empty, error) {
+	uid, err := auth.MustUserIDFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &v1.LikePostReply{LikesCount: p.LikesCount}, nil
-}
-
-func toPBPost(p *biz.Post) *v1.Post {
-	if p == nil {
-		return nil
+	if req.Id <= 0 {
+		return nil, v1.ErrorValidationFailed("invalid id")
 	}
-	return &v1.Post{
-		Id:           p.ID,
-		AuthorId:     p.AuthorID,
-		Title:        p.Title,
-		BodyMarkdown: p.BodyMarkdown,
-		Tags:         p.Tags,
-		LikesCount:   p.LikesCount,
-		CreatedAt:    timestamppb.New(p.CreatedAt),
-		UpdatedAt:    timestamppb.New(p.UpdatedAt),
+	if err := s.uc.Unlike(ctx, req.Id, uid); err != nil {
+		return nil, err
 	}
+	return &emptypb.Empty{}, nil
 }

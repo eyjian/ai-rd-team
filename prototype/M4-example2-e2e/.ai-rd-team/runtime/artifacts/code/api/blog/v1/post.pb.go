@@ -1,316 +1,263 @@
-// Code hand-written by architect (minimal subset of protoc-gen-go output).
-// Source: post.proto
-
 package v1
 
 import (
-	context "context"
+	"context"
+	"strconv"
 
-	"google.golang.org/protobuf/reflect/protoreflect"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+	"github.com/go-kratos/kratos/v2/transport/http"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// ----------------------------- Messages ------------------------------------
-
-type Post struct {
-	Id           int64                  `json:"id,omitempty"`
-	AuthorId     int64                  `json:"author_id,omitempty"`
-	Title        string                 `json:"title,omitempty"`
-	BodyMarkdown string                 `json:"body_markdown,omitempty"`
-	Tags         []string               `json:"tags,omitempty"`
-	LikesCount   int64                  `json:"likes_count,omitempty"`
-	CreatedAt    *timestamppb.Timestamp `json:"created_at,omitempty"`
-	UpdatedAt    *timestamppb.Timestamp `json:"updated_at,omitempty"`
-}
-
-func (m *Post) Reset()                              { *m = Post{} }
-func (m *Post) String() string                      { return "Post" }
-func (*Post) ProtoMessage()                         {}
-func (m *Post) ProtoReflect() protoreflect.Message  { return nil }
-
-func (m *Post) GetId() int64 {
-	if m == nil {
-		return 0
-	}
-	return m.Id
-}
-func (m *Post) GetAuthorId() int64 {
-	if m == nil {
-		return 0
-	}
-	return m.AuthorId
-}
-func (m *Post) GetTitle() string {
-	if m == nil {
-		return ""
-	}
-	return m.Title
-}
-func (m *Post) GetBodyMarkdown() string {
-	if m == nil {
-		return ""
-	}
-	return m.BodyMarkdown
-}
-func (m *Post) GetTags() []string {
-	if m == nil {
-		return nil
-	}
-	return m.Tags
-}
-func (m *Post) GetLikesCount() int64 {
-	if m == nil {
-		return 0
-	}
-	return m.LikesCount
-}
-func (m *Post) GetCreatedAt() *timestamppb.Timestamp {
-	if m == nil {
-		return nil
-	}
-	return m.CreatedAt
-}
-func (m *Post) GetUpdatedAt() *timestamppb.Timestamp {
-	if m == nil {
-		return nil
-	}
-	return m.UpdatedAt
-}
+// --- Messages ---
 
 type CreatePostRequest struct {
-	Title        string   `json:"title,omitempty"`
-	BodyMarkdown string   `json:"body_markdown,omitempty"`
-	Tags         []string `json:"tags,omitempty"`
-}
-
-func (m *CreatePostRequest) Reset()                              { *m = CreatePostRequest{} }
-func (m *CreatePostRequest) String() string                      { return "CreatePostRequest" }
-func (*CreatePostRequest) ProtoMessage()                         {}
-func (m *CreatePostRequest) ProtoReflect() protoreflect.Message  { return nil }
-
-func (m *CreatePostRequest) GetTitle() string {
-	if m == nil {
-		return ""
-	}
-	return m.Title
-}
-func (m *CreatePostRequest) GetBodyMarkdown() string {
-	if m == nil {
-		return ""
-	}
-	return m.BodyMarkdown
-}
-func (m *CreatePostRequest) GetTags() []string {
-	if m == nil {
-		return nil
-	}
-	return m.Tags
+	Title string   `json:"title,omitempty"`
+	Body  string   `json:"body,omitempty"`
+	Tags  []string `json:"tags,omitempty"`
 }
 
 type GetPostRequest struct {
 	Id int64 `json:"id,omitempty"`
 }
 
-func (m *GetPostRequest) Reset()                              { *m = GetPostRequest{} }
-func (m *GetPostRequest) String() string                      { return "GetPostRequest" }
-func (*GetPostRequest) ProtoMessage()                         {}
-func (m *GetPostRequest) ProtoReflect() protoreflect.Message  { return nil }
+type ListPostRequest struct {
+	Page int32  `json:"page,omitempty"`
+	Size int32  `json:"size,omitempty"`
+	Tag  string `json:"tag,omitempty"`
+}
 
-func (m *GetPostRequest) GetId() int64 {
-	if m == nil {
-		return 0
-	}
-	return m.Id
+type ListPostReply struct {
+	Items []*PostReply `json:"items,omitempty"`
+	Total int64        `json:"total,omitempty"`
+}
+
+type UpdatePostRequest struct {
+	Id    int64    `json:"id,omitempty"`
+	Title string   `json:"title,omitempty"`
+	Body  string   `json:"body,omitempty"`
+	Tags  []string `json:"tags,omitempty"`
 }
 
 type DeletePostRequest struct {
 	Id int64 `json:"id,omitempty"`
 }
 
-func (m *DeletePostRequest) Reset()                              { *m = DeletePostRequest{} }
-func (m *DeletePostRequest) String() string                      { return "DeletePostRequest" }
-func (*DeletePostRequest) ProtoMessage()                         {}
-func (m *DeletePostRequest) ProtoReflect() protoreflect.Message  { return nil }
-
-func (m *DeletePostRequest) GetId() int64 {
-	if m == nil {
-		return 0
-	}
-	return m.Id
-}
-
-type UpdatePostRequest struct {
-	Id           int64    `json:"id,omitempty"`
-	Title        string   `json:"title,omitempty"`
-	BodyMarkdown string   `json:"body_markdown,omitempty"`
-	Tags         []string `json:"tags,omitempty"`
-}
-
-func (m *UpdatePostRequest) Reset()                              { *m = UpdatePostRequest{} }
-func (m *UpdatePostRequest) String() string                      { return "UpdatePostRequest" }
-func (*UpdatePostRequest) ProtoMessage()                         {}
-func (m *UpdatePostRequest) ProtoReflect() protoreflect.Message  { return nil }
-
-func (m *UpdatePostRequest) GetId() int64 {
-	if m == nil {
-		return 0
-	}
-	return m.Id
-}
-func (m *UpdatePostRequest) GetTitle() string {
-	if m == nil {
-		return ""
-	}
-	return m.Title
-}
-func (m *UpdatePostRequest) GetBodyMarkdown() string {
-	if m == nil {
-		return ""
-	}
-	return m.BodyMarkdown
-}
-func (m *UpdatePostRequest) GetTags() []string {
-	if m == nil {
-		return nil
-	}
-	return m.Tags
-}
-
-type ListPostsRequest struct {
-	Page int32  `json:"page,omitempty"`
-	Size int32  `json:"size,omitempty"`
-	Tag  string `json:"tag,omitempty"`
-}
-
-func (m *ListPostsRequest) Reset()                              { *m = ListPostsRequest{} }
-func (m *ListPostsRequest) String() string                      { return "ListPostsRequest" }
-func (*ListPostsRequest) ProtoMessage()                         {}
-func (m *ListPostsRequest) ProtoReflect() protoreflect.Message  { return nil }
-
-func (m *ListPostsRequest) GetPage() int32 {
-	if m == nil {
-		return 0
-	}
-	return m.Page
-}
-func (m *ListPostsRequest) GetSize() int32 {
-	if m == nil {
-		return 0
-	}
-	return m.Size
-}
-func (m *ListPostsRequest) GetTag() string {
-	if m == nil {
-		return ""
-	}
-	return m.Tag
-}
-
-type ListPostsReply struct {
-	Items []*Post `json:"items,omitempty"`
-	Total int64   `json:"total,omitempty"`
-}
-
-func (m *ListPostsReply) Reset()                              { *m = ListPostsReply{} }
-func (m *ListPostsReply) String() string                      { return "ListPostsReply" }
-func (*ListPostsReply) ProtoMessage()                         {}
-func (m *ListPostsReply) ProtoReflect() protoreflect.Message  { return nil }
-
-func (m *ListPostsReply) GetItems() []*Post {
-	if m == nil {
-		return nil
-	}
-	return m.Items
-}
-func (m *ListPostsReply) GetTotal() int64 {
-	if m == nil {
-		return 0
-	}
-	return m.Total
-}
-
-type LikePostRequest struct {
+type LikeRequest struct {
 	Id int64 `json:"id,omitempty"`
 }
 
-func (m *LikePostRequest) Reset()                              { *m = LikePostRequest{} }
-func (m *LikePostRequest) String() string                      { return "LikePostRequest" }
-func (*LikePostRequest) ProtoMessage()                         {}
-func (m *LikePostRequest) ProtoReflect() protoreflect.Message  { return nil }
+type PostReply struct {
+	Id        int64                  `json:"id,omitempty"`
+	AuthorId  int64                  `json:"author_id,omitempty"`
+	Title     string                 `json:"title,omitempty"`
+	Body      string                 `json:"body,omitempty"`
+	Tags      []string               `json:"tags,omitempty"`
+	LikeCount int64                  `json:"like_count,omitempty"`
+	CreatedAt *timestamppb.Timestamp `json:"created_at,omitempty"`
+	UpdatedAt *timestamppb.Timestamp `json:"updated_at,omitempty"`
+}
 
-func (m *LikePostRequest) GetId() int64 {
-	if m == nil {
-		return 0
+// --- Service interface ---
+
+type PostServer interface {
+	Create(context.Context, *CreatePostRequest) (*PostReply, error)
+	Get(context.Context, *GetPostRequest) (*PostReply, error)
+	List(context.Context, *ListPostRequest) (*ListPostReply, error)
+	Update(context.Context, *UpdatePostRequest) (*PostReply, error)
+	Delete(context.Context, *DeletePostRequest) (*emptypb.Empty, error)
+	Like(context.Context, *LikeRequest) (*emptypb.Empty, error)
+	Unlike(context.Context, *LikeRequest) (*emptypb.Empty, error)
+}
+
+type UnimplementedPostServer struct{}
+
+func (UnimplementedPostServer) Create(context.Context, *CreatePostRequest) (*PostReply, error) {
+	return nil, ErrorInternalError("method Create not implemented")
+}
+func (UnimplementedPostServer) Get(context.Context, *GetPostRequest) (*PostReply, error) {
+	return nil, ErrorInternalError("method Get not implemented")
+}
+func (UnimplementedPostServer) List(context.Context, *ListPostRequest) (*ListPostReply, error) {
+	return nil, ErrorInternalError("method List not implemented")
+}
+func (UnimplementedPostServer) Update(context.Context, *UpdatePostRequest) (*PostReply, error) {
+	return nil, ErrorInternalError("method Update not implemented")
+}
+func (UnimplementedPostServer) Delete(context.Context, *DeletePostRequest) (*emptypb.Empty, error) {
+	return nil, ErrorInternalError("method Delete not implemented")
+}
+func (UnimplementedPostServer) Like(context.Context, *LikeRequest) (*emptypb.Empty, error) {
+	return nil, ErrorInternalError("method Like not implemented")
+}
+func (UnimplementedPostServer) Unlike(context.Context, *LikeRequest) (*emptypb.Empty, error) {
+	return nil, ErrorInternalError("method Unlike not implemented")
+}
+
+// --- HTTP registration ---
+
+const OperationPostCreate = "/blog.v1.Post/Create"
+const OperationPostGet = "/blog.v1.Post/Get"
+const OperationPostList = "/blog.v1.Post/List"
+const OperationPostUpdate = "/blog.v1.Post/Update"
+const OperationPostDelete = "/blog.v1.Post/Delete"
+const OperationPostLike = "/blog.v1.Post/Like"
+const OperationPostUnlike = "/blog.v1.Post/Unlike"
+
+func RegisterPostHTTPServer(s *http.Server, srv PostServer) {
+	r := s.Route("/")
+	r.POST("/v1/posts", _Post_Create0_HTTP_Handler(srv))
+	r.GET("/v1/posts/{id}", _Post_Get0_HTTP_Handler(srv))
+	r.GET("/v1/posts", _Post_List0_HTTP_Handler(srv))
+	r.PUT("/v1/posts/{id}", _Post_Update0_HTTP_Handler(srv))
+	r.DELETE("/v1/posts/{id}", _Post_Delete0_HTTP_Handler(srv))
+	r.POST("/v1/posts/{id}/like", _Post_Like0_HTTP_Handler(srv))
+	r.DELETE("/v1/posts/{id}/like", _Post_Unlike0_HTTP_Handler(srv))
+}
+
+func parsePathInt64(ctx http.Context, key string) (int64, error) {
+	v := ctx.Vars().Get(key)
+	if v == "" {
+		return 0, ErrorValidationFailed("missing path param %s", key)
 	}
-	return m.Id
-}
-
-type UnlikePostRequest struct {
-	Id int64 `json:"id,omitempty"`
-}
-
-func (m *UnlikePostRequest) Reset()                              { *m = UnlikePostRequest{} }
-func (m *UnlikePostRequest) String() string                      { return "UnlikePostRequest" }
-func (*UnlikePostRequest) ProtoMessage()                         {}
-func (m *UnlikePostRequest) ProtoReflect() protoreflect.Message  { return nil }
-
-func (m *UnlikePostRequest) GetId() int64 {
-	if m == nil {
-		return 0
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil {
+		return 0, ErrorValidationFailed("invalid path param %s: %s", key, v)
 	}
-	return m.Id
+	return n, nil
 }
 
-type LikePostReply struct {
-	LikesCount int64 `json:"likes_count,omitempty"`
-}
-
-func (m *LikePostReply) Reset()                              { *m = LikePostReply{} }
-func (m *LikePostReply) String() string                      { return "LikePostReply" }
-func (*LikePostReply) ProtoMessage()                         {}
-func (m *LikePostReply) ProtoReflect() protoreflect.Message  { return nil }
-
-func (m *LikePostReply) GetLikesCount() int64 {
-	if m == nil {
-		return 0
+func _Post_Create0_HTTP_Handler(srv PostServer) func(http.Context) error {
+	return func(ctx http.Context) error {
+		var in CreatePostRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationPostCreate)
+		h := ctx.Middleware(func(c context.Context, req any) (any, error) {
+			return srv.Create(c, req.(*CreatePostRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		return ctx.Result(200, out.(*PostReply))
 	}
-	return m.LikesCount
 }
 
-// ----------------------------- Service -------------------------------------
-
-// PostServiceServer is implemented by internal/service.PostService.
-type PostServiceServer interface {
-	CreatePost(ctx context.Context, req *CreatePostRequest) (*Post, error)
-	GetPost(ctx context.Context, req *GetPostRequest) (*Post, error)
-	UpdatePost(ctx context.Context, req *UpdatePostRequest) (*Post, error)
-	DeletePost(ctx context.Context, req *DeletePostRequest) (*emptypb.Empty, error)
-	ListPosts(ctx context.Context, req *ListPostsRequest) (*ListPostsReply, error)
-	LikePost(ctx context.Context, req *LikePostRequest) (*LikePostReply, error)
-	UnlikePost(ctx context.Context, req *UnlikePostRequest) (*LikePostReply, error)
+func _Post_Get0_HTTP_Handler(srv PostServer) func(http.Context) error {
+	return func(ctx http.Context) error {
+		id, err := parsePathInt64(ctx, "id")
+		if err != nil {
+			return err
+		}
+		in := &GetPostRequest{Id: id}
+		http.SetOperation(ctx, OperationPostGet)
+		h := ctx.Middleware(func(c context.Context, req any) (any, error) {
+			return srv.Get(c, req.(*GetPostRequest))
+		})
+		out, err := h(ctx, in)
+		if err != nil {
+			return err
+		}
+		return ctx.Result(200, out.(*PostReply))
+	}
 }
 
-type UnimplementedPostServiceServer struct{}
+func _Post_List0_HTTP_Handler(srv PostServer) func(http.Context) error {
+	return func(ctx http.Context) error {
+		var in ListPostRequest
+		if err := ctx.BindQuery(&in); err != nil {
+			return err
+		}
+		http.SetOperation(ctx, OperationPostList)
+		h := ctx.Middleware(func(c context.Context, req any) (any, error) {
+			return srv.List(c, req.(*ListPostRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		return ctx.Result(200, out.(*ListPostReply))
+	}
+}
 
-func (UnimplementedPostServiceServer) CreatePost(context.Context, *CreatePostRequest) (*Post, error) {
-	return nil, errNotImpl("CreatePost")
+func _Post_Update0_HTTP_Handler(srv PostServer) func(http.Context) error {
+	return func(ctx http.Context) error {
+		var in UpdatePostRequest
+		if err := ctx.Bind(&in); err != nil {
+			return err
+		}
+		id, err := parsePathInt64(ctx, "id")
+		if err != nil {
+			return err
+		}
+		in.Id = id
+		http.SetOperation(ctx, OperationPostUpdate)
+		h := ctx.Middleware(func(c context.Context, req any) (any, error) {
+			return srv.Update(c, req.(*UpdatePostRequest))
+		})
+		out, err := h(ctx, &in)
+		if err != nil {
+			return err
+		}
+		return ctx.Result(200, out.(*PostReply))
+	}
 }
-func (UnimplementedPostServiceServer) GetPost(context.Context, *GetPostRequest) (*Post, error) {
-	return nil, errNotImpl("GetPost")
+
+func _Post_Delete0_HTTP_Handler(srv PostServer) func(http.Context) error {
+	return func(ctx http.Context) error {
+		id, err := parsePathInt64(ctx, "id")
+		if err != nil {
+			return err
+		}
+		in := &DeletePostRequest{Id: id}
+		http.SetOperation(ctx, OperationPostDelete)
+		h := ctx.Middleware(func(c context.Context, req any) (any, error) {
+			return srv.Delete(c, req.(*DeletePostRequest))
+		})
+		out, err := h(ctx, in)
+		if err != nil {
+			return err
+		}
+		return ctx.Result(200, out.(*emptypb.Empty))
+	}
 }
-func (UnimplementedPostServiceServer) UpdatePost(context.Context, *UpdatePostRequest) (*Post, error) {
-	return nil, errNotImpl("UpdatePost")
+
+func _Post_Like0_HTTP_Handler(srv PostServer) func(http.Context) error {
+	return func(ctx http.Context) error {
+		id, err := parsePathInt64(ctx, "id")
+		if err != nil {
+			return err
+		}
+		in := &LikeRequest{Id: id}
+		http.SetOperation(ctx, OperationPostLike)
+		h := ctx.Middleware(func(c context.Context, req any) (any, error) {
+			return srv.Like(c, req.(*LikeRequest))
+		})
+		out, err := h(ctx, in)
+		if err != nil {
+			return err
+		}
+		return ctx.Result(200, out.(*emptypb.Empty))
+	}
 }
-func (UnimplementedPostServiceServer) DeletePost(context.Context, *DeletePostRequest) (*emptypb.Empty, error) {
-	return nil, errNotImpl("DeletePost")
-}
-func (UnimplementedPostServiceServer) ListPosts(context.Context, *ListPostsRequest) (*ListPostsReply, error) {
-	return nil, errNotImpl("ListPosts")
-}
-func (UnimplementedPostServiceServer) LikePost(context.Context, *LikePostRequest) (*LikePostReply, error) {
-	return nil, errNotImpl("LikePost")
-}
-func (UnimplementedPostServiceServer) UnlikePost(context.Context, *UnlikePostRequest) (*LikePostReply, error) {
-	return nil, errNotImpl("UnlikePost")
+
+func _Post_Unlike0_HTTP_Handler(srv PostServer) func(http.Context) error {
+	return func(ctx http.Context) error {
+		id, err := parsePathInt64(ctx, "id")
+		if err != nil {
+			return err
+		}
+		in := &LikeRequest{Id: id}
+		http.SetOperation(ctx, OperationPostUnlike)
+		h := ctx.Middleware(func(c context.Context, req any) (any, error) {
+			return srv.Unlike(c, req.(*LikeRequest))
+		})
+		out, err := h(ctx, in)
+		if err != nil {
+			return err
+		}
+		return ctx.Result(200, out.(*emptypb.Empty))
+	}
 }

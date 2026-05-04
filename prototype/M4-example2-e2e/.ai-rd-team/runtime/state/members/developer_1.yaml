@@ -1,24 +1,8 @@
 name: developer_1
 role: developer
-status: done
-current_task: 已完成 internal/biz + internal/data + schema.sql + biz 单测
-progress: '100%'
-last_updated: '2026-05-04T15:40:00+08:00'
-produced_files:
-  - internal/biz/biz.go
-  - internal/biz/user.go
-  - internal/biz/post.go
-  - internal/biz/comment.go
-  - internal/biz/mock_test.go
-  - internal/biz/user_test.go
-  - internal/biz/post_test.go
-  - internal/biz/comment_test.go
-  - internal/data/data.go
-  - internal/data/errors.go
-  - internal/data/user.go
-  - internal/data/post.go
-  - internal/data/comment.go
-  - internal/pkg/password/bcrypt.go
-  - configs/schema.sql
-  - artifacts/reports/report-developer_1.md
+status: terminated
+current_task: ''
+progress: ''
+last_updated: '2026-05-04T09:03:12.137+00:00'
+produced_files: []
 blocking_issues: []

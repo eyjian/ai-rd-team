@@ -4,27 +4,24 @@ import (
 	"blog/internal/conf"
 
 	"github.com/go-kratos/kratos/v2/log"
-	"github.com/go-kratos/kratos/v2/middleware/logging"
 	"github.com/go-kratos/kratos/v2/middleware/recovery"
-	kgrpc "github.com/go-kratos/kratos/v2/transport/grpc"
+	"github.com/go-kratos/kratos/v2/transport/grpc"
 )
 
-// NewGRPCServer builds a minimal kratos gRPC server.
-// Services are not individually registered here — HTTP is the primary transport for BlogAPI.
-// Starting the gRPC server allows future rpc-only clients to attach via stubs.
-func NewGRPCServer(c *conf.Server, logger log.Logger) *kgrpc.Server {
-	var opts []kgrpc.ServerOption
-	opts = append(opts, kgrpc.Middleware(
-		recovery.Recovery(),
-		logging.Server(logger),
-	))
-	if c != nil && c.GetGrpc() != nil {
-		if addr := c.GetGrpc().GetAddr(); addr != "" {
-			opts = append(opts, kgrpc.Address(addr))
-		}
-		if to := c.GetGrpc().GetTimeout(); to > 0 {
-			opts = append(opts, kgrpc.Timeout(to))
-		}
+// NewGRPCServer 构造 gRPC server（本期仅提供空壳，未注册任何业务服务，
+// 因为 proto 手写等价仅覆盖 HTTP 注册；kratos.App 仍可持有它以满足依赖图）
+func NewGRPCServer(c *conf.Server, logger log.Logger) *grpc.Server {
+	opts := []grpc.ServerOption{
+		grpc.Middleware(recovery.Recovery()),
 	}
-	return kgrpc.NewServer(opts...)
+	if c.GRPC.Network != "" {
+		opts = append(opts, grpc.Network(c.GRPC.Network))
+	}
+	if c.GRPC.Addr != "" {
+		opts = append(opts, grpc.Address(c.GRPC.Addr))
+	}
+	if c.GRPC.Timeout > 0 {
+		opts = append(opts, grpc.Timeout(c.GRPC.Timeout))
+	}
+	return grpc.NewServer(opts...)
 }

@@ -6,73 +6,223 @@ import (
 	"strings"
 	"time"
 
-	kerrors "github.com/go-kratos/kratos/v2/errors"
+	v1 "blog/api/blog/v1"
+
 	"github.com/go-kratos/kratos/v2/log"
 )
 
-// Post 为文章聚合根的领域模型。
+// Post 为文章 DO。
 type Post struct {
-	ID           int64
-	AuthorID     int64
-	Title        string
-	BodyMarkdown string
-	Tags         []string
-	LikesCount   int64
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID        int64
+	AuthorID  int64
+	Title     string
+	Body      string
+	Tags      []string
+	LikeCount int64
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
-// ErrPostNotFound 作为 data 层向 biz 层传递 "文章未找到" 的内部哨兵值。
-var ErrPostNotFound = errors.New("post not found")
+// ErrPostNotFound 是 data 层在文章不存在时应返回的哨兵错误。
+var ErrPostNotFound = errors.New("biz: post not found")
 
 // PostRepo 由 data 层实现。
-//
-// AddLike / RemoveLike 需保证幂等：
-//   - AddLike 已点赞返回 added=false 且不报错，新增则 added=true 且在同事务内 +1；
-//   - RemoveLike 同理。
 type PostRepo interface {
 	Create(ctx context.Context, p *Post) (*Post, error)
 	GetByID(ctx context.Context, id int64) (*Post, error)
-	Update(ctx context.Context, p *Post) (*Post, error)
+	Update(ctx context.Context, p *Post) error
 	Delete(ctx context.Context, id int64) error
 	List(ctx context.Context, page, size int32, tag string) ([]*Post, int64, error)
-	AddLike(ctx context.Context, postID, userID int64) (added bool, err error)
-	RemoveLike(ctx context.Context, postID, userID int64) (removed bool, err error)
 }
 
-// PostUsecase 文章用例。
+// PostLikeRepo 封装点赞表操作，保证幂等。
+type PostLikeRepo interface {
+	// Add 新增点赞；返回 added=true 表示本次真正新增，false 表示已存在（幂等）。
+	// 当 added=true 时，实现需在同一事务中 posts.like_count+=1。
+	Add(ctx context.Context, postID, userID int64) (added bool, err error)
+	// Remove 取消点赞；返回 removed=true 表示本次真正删除，false 表示本来就没有（幂等）。
+	// 当 removed=true 时，实现需在同一事务中 posts.like_count-=1。
+	Remove(ctx context.Context, postID, userID int64) (removed bool, err error)
+}
+
+// PostUsecase 封装文章相关用例。
 type PostUsecase struct {
 	pr  PostRepo
-	ur  UserRepo
+	lr  PostLikeRepo
 	log *log.Helper
 }
 
-// NewPostUsecase 构造函数。
-func NewPostUsecase(pr PostRepo, ur UserRepo, logger log.Logger) *PostUsecase {
+// NewPostUsecase 构造 PostUsecase。
+func NewPostUsecase(pr PostRepo, lr PostLikeRepo, logger log.Logger) *PostUsecase {
 	return &PostUsecase{
 		pr:  pr,
-		ur:  ur,
+		lr:  lr,
 		log: log.NewHelper(log.With(logger, "module", "biz/post")),
 	}
 }
 
-func validatePostInput(title, body string) error {
+// Create 新建文章。
+func (uc *PostUsecase) Create(ctx context.Context, authorID int64, title, body string, tags []string) (*Post, error) {
+	if authorID <= 0 {
+		return nil, v1.ErrorUserUnauthenticated("author required")
+	}
 	title = strings.TrimSpace(title)
-	if title == "" || len(title) > 200 {
-		return kerrors.BadRequest("VALIDATION_FAILED", "title length 1..200")
+	if title == "" {
+		return nil, v1.ErrorValidationFailed("title required")
 	}
-	if strings.TrimSpace(body) == "" {
-		return kerrors.BadRequest("VALIDATION_FAILED", "body_markdown required")
+	if len(title) > 256 {
+		return nil, v1.ErrorValidationFailed("title too long (<=256)")
 	}
-	return nil
+	tags = normalizeTags(tags)
+
+	p := &Post{
+		AuthorID: authorID,
+		Title:    title,
+		Body:     body,
+		Tags:     tags,
+	}
+	return uc.pr.Create(ctx, p)
 }
 
-// normalizeTags 去重 + 去空 + 小写，保证在 tags 数组列中的稳定性。
-func normalizeTags(tags []string) []string {
-	seen := make(map[string]struct{}, len(tags))
-	out := make([]string, 0, len(tags))
-	for _, t := range tags {
-		t = strings.ToLower(strings.TrimSpace(t))
+// Get 查询单篇文章。
+func (uc *PostUsecase) Get(ctx context.Context, id int64) (*Post, error) {
+	if id <= 0 {
+		return nil, v1.ErrorValidationFailed("id must be positive")
+	}
+	p, err := uc.pr.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrPostNotFound) {
+			return nil, v1.ErrorPostNotFound("post %d not found", id)
+		}
+		return nil, err
+	}
+	if p == nil {
+		return nil, v1.ErrorPostNotFound("post %d not found", id)
+	}
+	return p, nil
+}
+
+// List 分页查询文章（可选按 tag 过滤）。
+func (uc *PostUsecase) List(ctx context.Context, page, size int32, tag string) ([]*Post, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if size < 1 {
+		size = 10
+	}
+	if size > 50 {
+		size = 50
+	}
+	tag = strings.TrimSpace(tag)
+	return uc.pr.List(ctx, page, size, tag)
+}
+
+// Update 更新文章；仅作者可更新。
+func (uc *PostUsecase) Update(ctx context.Context, authorID, id int64, title, body string, tags []string) (*Post, error) {
+	if authorID <= 0 {
+		return nil, v1.ErrorUserUnauthenticated("author required")
+	}
+	if id <= 0 {
+		return nil, v1.ErrorValidationFailed("id must be positive")
+	}
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return nil, v1.ErrorValidationFailed("title required")
+	}
+
+	existing, err := uc.pr.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrPostNotFound) {
+			return nil, v1.ErrorPostNotFound("post %d not found", id)
+		}
+		return nil, err
+	}
+	if existing == nil {
+		return nil, v1.ErrorPostNotFound("post %d not found", id)
+	}
+	if existing.AuthorID != authorID {
+		return nil, v1.ErrorPostForbidden("only author can update post %d", id)
+	}
+
+	existing.Title = title
+	existing.Body = body
+	existing.Tags = normalizeTags(tags)
+	if err := uc.pr.Update(ctx, existing); err != nil {
+		return nil, err
+	}
+	return existing, nil
+}
+
+// Delete 删除文章；仅作者可删除。
+func (uc *PostUsecase) Delete(ctx context.Context, authorID, id int64) error {
+	if authorID <= 0 {
+		return v1.ErrorUserUnauthenticated("author required")
+	}
+	if id <= 0 {
+		return v1.ErrorValidationFailed("id must be positive")
+	}
+	existing, err := uc.pr.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrPostNotFound) {
+			return v1.ErrorPostNotFound("post %d not found", id)
+		}
+		return err
+	}
+	if existing == nil {
+		return v1.ErrorPostNotFound("post %d not found", id)
+	}
+	if existing.AuthorID != authorID {
+		return v1.ErrorPostForbidden("only author can delete post %d", id)
+	}
+	return uc.pr.Delete(ctx, id)
+}
+
+// Like 点赞（幂等）。
+func (uc *PostUsecase) Like(ctx context.Context, postID, userID int64) error {
+	if userID <= 0 {
+		return v1.ErrorUserUnauthenticated("user required")
+	}
+	if postID <= 0 {
+		return v1.ErrorValidationFailed("post id must be positive")
+	}
+	// 先确认文章存在（便于返回 404）
+	if _, err := uc.pr.GetByID(ctx, postID); err != nil {
+		if errors.Is(err, ErrPostNotFound) {
+			return v1.ErrorPostNotFound("post %d not found", postID)
+		}
+		return err
+	}
+	_, err := uc.lr.Add(ctx, postID, userID)
+	return err
+}
+
+// Unlike 取消点赞（幂等）。
+func (uc *PostUsecase) Unlike(ctx context.Context, postID, userID int64) error {
+	if userID <= 0 {
+		return v1.ErrorUserUnauthenticated("user required")
+	}
+	if postID <= 0 {
+		return v1.ErrorValidationFailed("post id must be positive")
+	}
+	if _, err := uc.pr.GetByID(ctx, postID); err != nil {
+		if errors.Is(err, ErrPostNotFound) {
+			return v1.ErrorPostNotFound("post %d not found", postID)
+		}
+		return err
+	}
+	_, err := uc.lr.Remove(ctx, postID, userID)
+	return err
+}
+
+// normalizeTags trim 每个 tag 并过滤空值，保持输入顺序，去重。
+func normalizeTags(in []string) []string {
+	if len(in) == 0 {
+		return []string{}
+	}
+	out := make([]string, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+	for _, t := range in {
+		t = strings.TrimSpace(t)
 		if t == "" {
 			continue
 		}
@@ -83,113 +233,4 @@ func normalizeTags(tags []string) []string {
 		out = append(out, t)
 	}
 	return out
-}
-
-// Create 新建文章。
-func (uc *PostUsecase) Create(ctx context.Context, authorID int64, title, body string, tags []string) (*Post, error) {
-	if err := validatePostInput(title, body); err != nil {
-		return nil, err
-	}
-	// 校验作者存在，失败时返回 USER_NOT_FOUND
-	if _, err := uc.ur.GetByID(ctx, authorID); err != nil {
-		if errors.Is(err, ErrUserNotFound) || kerrors.IsNotFound(err) {
-			return nil, kerrors.NotFound("USER_NOT_FOUND", "author not found")
-		}
-		return nil, err
-	}
-	p := &Post{
-		AuthorID:     authorID,
-		Title:        strings.TrimSpace(title),
-		BodyMarkdown: body,
-		Tags:         normalizeTags(tags),
-	}
-	return uc.pr.Create(ctx, p)
-}
-
-// Get 获取文章详情。
-func (uc *PostUsecase) Get(ctx context.Context, id int64) (*Post, error) {
-	p, err := uc.pr.GetByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, ErrPostNotFound) || kerrors.IsNotFound(err) {
-			return nil, kerrors.NotFound("POST_NOT_FOUND", "post not found")
-		}
-		return nil, err
-	}
-	return p, nil
-}
-
-// Update 更新文章，仅作者本人可以操作。
-func (uc *PostUsecase) Update(ctx context.Context, operatorID, postID int64, title, body string, tags []string) (*Post, error) {
-	if err := validatePostInput(title, body); err != nil {
-		return nil, err
-	}
-	existing, err := uc.pr.GetByID(ctx, postID)
-	if err != nil {
-		if errors.Is(err, ErrPostNotFound) || kerrors.IsNotFound(err) {
-			return nil, kerrors.NotFound("POST_NOT_FOUND", "post not found")
-		}
-		return nil, err
-	}
-	if existing.AuthorID != operatorID {
-		return nil, kerrors.Forbidden("FORBIDDEN", "only author can update")
-	}
-	existing.Title = strings.TrimSpace(title)
-	existing.BodyMarkdown = body
-	existing.Tags = normalizeTags(tags)
-	return uc.pr.Update(ctx, existing)
-}
-
-// Delete 删除文章，仅作者本人可以操作。
-func (uc *PostUsecase) Delete(ctx context.Context, operatorID, postID int64) error {
-	existing, err := uc.pr.GetByID(ctx, postID)
-	if err != nil {
-		if errors.Is(err, ErrPostNotFound) || kerrors.IsNotFound(err) {
-			return kerrors.NotFound("POST_NOT_FOUND", "post not found")
-		}
-		return err
-	}
-	if existing.AuthorID != operatorID {
-		return kerrors.Forbidden("FORBIDDEN", "only author can delete")
-	}
-	return uc.pr.Delete(ctx, postID)
-}
-
-// List 分页列出文章，可选 tag 过滤。
-func (uc *PostUsecase) List(ctx context.Context, page, size int32, tag string) ([]*Post, int64, error) {
-	if page < 1 {
-		page = 1
-	}
-	if size < 1 {
-		size = 20
-	}
-	if size > 100 {
-		size = 100
-	}
-	tag = strings.ToLower(strings.TrimSpace(tag))
-	return uc.pr.List(ctx, page, size, tag)
-}
-
-// Like 点赞文章，幂等：已点赞再调用不报错。
-func (uc *PostUsecase) Like(ctx context.Context, postID, userID int64) error {
-	// 先确认文章存在，避免 repo 层把 "post 不存在" 吞成 "已点过赞"。
-	if _, err := uc.pr.GetByID(ctx, postID); err != nil {
-		if errors.Is(err, ErrPostNotFound) || kerrors.IsNotFound(err) {
-			return kerrors.NotFound("POST_NOT_FOUND", "post not found")
-		}
-		return err
-	}
-	_, err := uc.pr.AddLike(ctx, postID, userID)
-	return err
-}
-
-// Unlike 取消点赞，幂等。
-func (uc *PostUsecase) Unlike(ctx context.Context, postID, userID int64) error {
-	if _, err := uc.pr.GetByID(ctx, postID); err != nil {
-		if errors.Is(err, ErrPostNotFound) || kerrors.IsNotFound(err) {
-			return kerrors.NotFound("POST_NOT_FOUND", "post not found")
-		}
-		return err
-	}
-	_, err := uc.pr.RemoveLike(ctx, postID, userID)
-	return err
 }

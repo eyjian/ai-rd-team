@@ -1,236 +1,160 @@
-# BlogAPI 系统设计（spec-design）
+# BlogAPI 架构设计（Standard 档）
 
-> Owner: architect（陈架构）
-> Stack: Go 1.21 + go-kratos v2 + PostgreSQL 15 + GORM + JWT + wire
-> Module name: `blog`
-
----
-
-## 1. 目标与范围
-
-构建一个博客后端服务 BlogAPI，提供：
-
-- 用户：注册、登录（JWT）、获取当前用户
-- 文章：CRUD、分页 + 标签过滤、点赞（幂等）
-- 评论：发表、列表（按文章）
-
-非目标（本期不做）：富文本渲染、图片上传、关注关系、通知、管理后台。
+> 作者：陈架构（architect）
+> 技术栈：Go 1.21+ / Kratos v2 / GORM / PostgreSQL 15 / JWT / wire
+> module 名：`blog`
 
 ---
 
-## 2. 架构总览
+## 1. 架构分层
 
-采用 Kratos 推荐的分层架构，依赖方向 **从外向内，内层不感知外层**：
+严格遵循 Kratos 四层：
 
 ```
- ┌──────────────────────────────────────────────────┐
- │ transport (HTTP + gRPC, by proto)                │
- │                                                  │
- │   api/blog/v1/*.proto  ──生成──>  *.pb.go        │
- └────────────────────────┬─────────────────────────┘
-                          │
- ┌────────────────────────▼─────────────────────────┐
- │ service/ （协议层）                               │
- │   - 把 proto 请求映射到 biz                      │
- │   - 不写业务逻辑                                 │
- └────────────────────────┬─────────────────────────┘
-                          │
- ┌────────────────────────▼─────────────────────────┐
- │ biz/ （业务逻辑）                                 │
- │   - UserUsecase / PostUsecase / CommentUsecase   │
- │   - 只依赖 *Repo 接口                            │
- └────────────────────────┬─────────────────────────┘
-                          │
- ┌────────────────────────▼─────────────────────────┐
- │ data/ （存储实现）                                │
- │   - userRepo / postRepo / commentRepo            │
- │   - GORM + PostgreSQL                            │
- └──────────────────────────────────────────────────┘
++----------------------------------------+
+| cmd/server (main + wire_gen)           |
++----------------------------------------+
+| internal/server  (HTTP/GRPC 服务器注册) |
++----------------------------------------+
+| internal/service (pb 接口实现，DTO<->DO) |
++----------------------------------------+
+| internal/biz     (核心业务 usecase, DO) |
++----------------------------------------+
+| internal/data    (repo 实现, GORM)      |
++----------------------------------------+
+| api/blog/v1      (proto + pb.go)        |
++----------------------------------------+
 ```
 
-- **biz 接口、data 实现**：`biz` 定义 `UserRepo / PostRepo / CommentRepo` 接口，`data` 提供实现，`wire` 在装配阶段绑定。
-- **依赖注入**：使用 `google/wire`，禁止全局变量和 `init()` 副作用。
-- **配置**：`configs/config.yaml` 由 `internal/conf/conf.pb.go`（proto 生成）反序列化，支持环境变量覆盖。
+- **biz 层禁止 import gorm**（仅依赖 repo interface 与纯 DO struct）
+- **service 层** 只做：pb 入参校验、调用 biz、error -> kratos errors、DO -> pb
+- **data 层** 实现 biz 定义的 repo 接口
 
 ---
 
-## 3. 目录结构
+## 2. 目录结构
 
 ```
-prototype/M4-example2-e2e/.ai-rd-team/runtime/artifacts/code/
-├── Makefile
-├── go.mod                             # module blog
-├── go.sum
-├── buf.gen.yaml
-├── api/
-│   ├── buf.yaml
-│   └── blog/v1/
-│       ├── common.proto
-│       ├── user.proto
-│       ├── post.proto
-│       ├── comment.proto
-│       ├── common.pb.go               # 手写版，免去 protoc
-│       ├── user.pb.go
-│       ├── post.pb.go
-│       └── comment.pb.go
-├── configs/
-│   ├── config.yaml
-│   └── schema.sql
+.
+├── go.mod                          # module = "blog"
 ├── cmd/server/
 │   ├── main.go
-│   ├── wire.go                        # +build wireinject
-│   └── wire_gen.go
-└── internal/
-    ├── conf/
-    │   ├── conf.proto
-    │   └── conf.pb.go
-    ├── biz/
-    │   ├── biz.go                     # ProviderSet
-    │   ├── user.go
-    │   ├── post.go
-    │   └── comment.go
-    ├── data/
-    │   ├── data.go                    # ProviderSet + *gorm.DB
-    │   ├── user.go
-    │   ├── post.go
-    │   └── comment.go
-    ├── service/
-    │   ├── service.go                 # ProviderSet
-    │   ├── user.go
-    │   ├── post.go
-    │   └── comment.go
-    ├── server/
-    │   ├── server.go                  # ProviderSet
-    │   ├── http.go
-    │   └── grpc.go
-    └── pkg/
-        ├── auth/                      # JWT 工具 + middleware
-        └── password/                  # bcrypt 封装
+│   ├── wire.go                     # +build wireinject
+│   └── wire_gen.go                 # wire 生成（手写等价）
+├── api/blog/v1/
+│   ├── common.proto / common.pb.go
+│   ├── user.proto   / user.pb.go
+│   ├── post.proto   / post.pb.go
+│   ├── comment.proto/ comment.pb.go
+│   └── errors.go                   # 错误码常量 + 便捷构造
+├── internal/
+│   ├── conf/                       # Bootstrap / Data / Server / Auth 配置
+│   ├── server/                     # http.go / grpc.go ProviderSet
+│   ├── service/                    # user / post / comment service
+│   ├── biz/                        # user / post / comment usecase + repo 接口
+│   └── data/                       # data.go / user_repo / post_repo / comment_repo
+├── configs/config.yaml
+└── Makefile
 ```
 
 ---
 
-## 4. 模块职责
+## 3. Wire 依赖图
 
-### 4.1 `api/blog/v1`（契约层）
-- 定义 `UserService / PostService / CommentService` 的 proto。
-- 生成（或手写）对应 `*.pb.go`，对外暴露 `UnimplementedXxxServer` + HTTP 路由注册函数。
-- **约束**：只定义协议，不放业务。
-
-### 4.2 `internal/service`（协议适配）
-- 实现 proto 定义的 gRPC interface，HTTP 通过同一实现自动暴露。
-- 调用 `biz.*Usecase`，把 biz 的领域模型映射回 `*.pb.go` 的 Response。
-- 负责从 context 提取 JWT 中的 `user_id`（通过中间件注入）。
-
-### 4.3 `internal/biz`（业务核心）
-- 定义领域模型 `User / Post / Comment`（纯结构体，无 GORM tag）。
-- 定义 `UserRepo / PostRepo / CommentRepo` 接口，字段语义锁定在 biz 侧。
-- Usecase 组合 Repo + 业务规则（权限、幂等、校验）。
-
-### 4.4 `internal/data`（持久化）
-- `Data` 结构体持有 `*gorm.DB`；`NewData(c *conf.Data) (*Data, cleanup, error)` 负责建立连接池。
-- 每个 Repo 内部定义 PO（GORM 模型）并在返回前映射为 biz 领域模型。
-- **禁止**把 PO 泄漏到 biz 层。
-
-### 4.5 `internal/server`
-- `NewHTTPServer` / `NewGRPCServer` 装配 middleware（recovery / logging / jwt / validate）。
-- 通过 proto 生成的 `Registerxxx` 函数把 service 绑定到 transport。
-
-### 4.6 `cmd/server`
-- `main.go` 读取 config → 调用 `wireApp` → `kratos.New().Run()`。
-- `wire.go` 声明 ProviderSet；`wire_gen.go` 为 wire 生成产物（允许手写，保持幂等）。
-
----
-
-## 5. 关键横切关注
-
-### 5.1 认证
-- 注册：`POST /v1/users`，bcrypt 散列密码。
-- 登录：`POST /v1/auth/login`，成功返回 JWT（HS256，claim: `sub=user_id`, `exp=24h`）。
-- 鉴权中间件：`internal/pkg/auth.JWTAuth(secret)`，把 `user_id` 注入 context；受保护路由通过 `selector.Server` 白名单放行 `/v1/users` 和 `/v1/auth/login` 以及 `GET /v1/posts*`。
-
-### 5.2 错误模型
-统一使用 `github.com/go-kratos/kratos/v2/errors`：
-
-| reason                | HTTP | 场景                       |
-| --------------------- | ---- | -------------------------- |
-| `USER_EMAIL_EXISTS`   | 409  | 注册时邮箱已存在           |
-| `USER_NOT_FOUND`      | 404  | 用户不存在                 |
-| `INVALID_CREDENTIALS` | 401  | 登录密码错误               |
-| `UNAUTHORIZED`        | 401  | 无 token 或过期            |
-| `FORBIDDEN`           | 403  | 非作者操作他人文章         |
-| `POST_NOT_FOUND`      | 404  | 文章不存在                 |
-| `COMMENT_NOT_FOUND`   | 404  | 评论不存在                 |
-| `VALIDATION_FAILED`   | 400  | 参数非法                   |
-
-### 5.3 幂等
-- `POST /v1/posts/:id/like`：DB 主键 `(post_id, user_id)`，`ON CONFLICT DO NOTHING` + 事务内 `UPDATE posts SET likes_count = likes_count + 1 WHERE changed`。
-- `DELETE /v1/posts/:id/like`：`DELETE WHERE` 返回影响行数决定是否 `likes_count -= 1`。
-
-### 5.4 事务
-- 涉及点赞计数、文章删除级联评论场景统一通过 `data.Transaction(ctx, func(txCtx) error)` 封装，Repo 在 `txCtx` 中取同一 `*gorm.DB`。
-
-### 5.5 配置
-`configs/config.yaml`：
-
-```yaml
-server:
-  http: { addr: "0.0.0.0:8000", timeout: "10s" }
-  grpc: { addr: "0.0.0.0:9000", timeout: "10s" }
-data:
-  database:
-    driver: "postgres"
-    source: "postgres://blog:blog@localhost:5432/blog?sslmode=disable"
-  log_level: "info"
-auth:
-  jwt_secret: "change-me-in-prod"
-  access_ttl: "24h"
+```
+cmd/server/main
+     │
+     ▼
+ wireSet = {
+   conf.ProviderSet,        // &conf.Bootstrap
+   data.ProviderSet,        // NewData, NewUserRepo, NewPostRepo, NewCommentRepo, NewPostLikeRepo
+   biz.ProviderSet,         // NewUserUsecase, NewPostUsecase, NewCommentUsecase
+   service.ProviderSet,     // NewUserService, NewPostService, NewCommentService
+   server.ProviderSet,      // NewHTTPServer, NewGRPCServer
+ }
+     │
+     ▼
+ App（kratos.App） => hs + gs
 ```
 
-对应 proto：`internal/conf/conf.proto` 定义 `Bootstrap{ Server, Data, Auth }`。
+注入链：
+
+```
+Bootstrap -> Data(GORM *gorm.DB) -> Repo(UserRepo/PostRepo/CommentRepo/PostLikeRepo)
+          -> Usecase(UserUsecase/PostUsecase/CommentUsecase)
+          -> Service(UserService/PostService/CommentService)
+          -> HTTPServer + GRPCServer
+          -> kratos.App
+```
 
 ---
 
-## 6. 数据库 schema（最终版）
+## 4. 错误码（kratos errors）
 
-与 team-lead 提供的 memory 基本一致，做了以下细化：
+| Reason                      | HTTP | 说明             |
+|-----------------------------|------|------------------|
+| USER_NOT_FOUND              | 404  | 用户不存在       |
+| USER_ALREADY_EXISTS         | 409  | 邮箱已注册       |
+| USER_CREDENTIAL_INVALID     | 401  | 登录失败         |
+| USER_UNAUTHENTICATED        | 401  | 未登录/token 无效|
+| POST_NOT_FOUND              | 404  | 文章不存在       |
+| POST_FORBIDDEN              | 403  | 非作者无权操作   |
+| COMMENT_NOT_FOUND           | 404  | 评论不存在       |
+| VALIDATION_FAILED           | 400  | 入参校验失败     |
+| INTERNAL_ERROR              | 500  | 未分类内部错误   |
 
-- `users.email` 强制 `CITEXT`（大小写无关），否则等价邮箱会重复；本期先用 `VARCHAR` + 入库前 `lower()`。
-- `posts.tags` 使用 `TEXT[] + GIN 索引`，搜索 `WHERE $1 = ANY(tags)`。
-- `comments` 增加 `ON DELETE CASCADE` 保证文章删除时自动清理。
-- `post_likes` 使用联合主键保证幂等。
+统一在 `api/blog/v1/errors.go` 定义常量和便捷构造函数，例如：
 
-SQL 见 `configs/schema.sql`（由 developer_1 落盘）。
-
----
-
-## 7. 测试策略（tester 接入点）
-
-- **单元测试**：`biz/*_test.go` 使用 mock 的 Repo 接口（`gomock` 或手写 stub）。
-- **集成测试**：`internal/data/*_test.go` 通过 `testcontainers-go` 起 Postgres 15。
-- **契约测试**：针对 HTTP API 提供 `tests/e2e/`（可由 tester 用 `httptest` 或 `resty` 编写）。
-- 命令：`go test ./... -race -cover`。
-
----
-
-## 8. 风险 & 未决项
-
-| 项 | 风险 | 方案 |
-|----|------|------|
-| proto 生成 | 环境可能缺 `protoc` | 提供**手写版** `*.pb.go`，保持最小结构体/方法即可编译 |
-| wire 生成 | 可能缺 wire CLI | `wire_gen.go` 手写落盘 |
-| bcrypt 成本 | 默认 cost=10 单测慢 | 测试环境设 `cost=4` |
-| tags 数组 | SQLite 兼容问题 | 只承诺 Postgres 15，不支持 sqlite |
+```go
+func ErrorPostNotFound(format string, a ...any) *errors.Error {
+    return errors.New(404, "POST_NOT_FOUND", fmt.Sprintf(format, a...))
+}
+```
 
 ---
 
-## 9. 分工（与 developer_1 / developer_2 / tester 协作）
+## 5. HTTP 映射
 
-| Owner        | 产出                                                                          |
-| ------------ | ----------------------------------------------------------------------------- |
-| architect    | `spec-design.md`、`data-interfaces.yaml`、`go.mod`、`api/blog/v1/*.pb.go`（含 proto 源） |
-| developer_1  | `internal/biz/*.go`、`internal/data/*.go`、`configs/schema.sql`、`internal/pkg/password`           |
-| developer_2  | `internal/conf/conf.pb.go`、`internal/server/*.go`、`internal/service/*.go`、`cmd/server/{main,wire,wire_gen}.go`、`Makefile`、`configs/config.yaml`、`internal/pkg/auth` |
-| tester       | `tests/e2e/*_test.go`、`internal/biz/*_test.go` 示例、`README` 测试章节                     |
+| Method | Path                         | Service 方法           | Biz 方法                     | 鉴权 |
+|--------|------------------------------|------------------------|------------------------------|------|
+| POST   | /v1/users                    | UserService.Register   | UserUsecase.Register         | -    |
+| POST   | /v1/auth/login               | UserService.Login      | UserUsecase.Login            | -    |
+| GET    | /v1/users/me                 | UserService.GetMe      | UserUsecase.GetByID          | JWT  |
+| POST   | /v1/posts                    | PostService.Create     | PostUsecase.Create           | JWT  |
+| GET    | /v1/posts/{id}               | PostService.Get        | PostUsecase.Get              | -    |
+| GET    | /v1/posts                    | PostService.List       | PostUsecase.List             | -    |
+| PUT    | /v1/posts/{id}               | PostService.Update     | PostUsecase.Update           | JWT  |
+| DELETE | /v1/posts/{id}               | PostService.Delete     | PostUsecase.Delete           | JWT  |
+| POST   | /v1/posts/{id}/comments      | CommentService.Create  | CommentUsecase.Create        | JWT  |
+| GET    | /v1/posts/{id}/comments      | CommentService.List    | CommentUsecase.ListByPost    | -    |
+| POST   | /v1/posts/{id}/like          | PostService.Like       | PostUsecase.Like             | JWT  |
+| DELETE | /v1/posts/{id}/like          | PostService.Unlike     | PostUsecase.Unlike           | JWT  |
 
-所有人对外契约**锁定**在 `data-interfaces.yaml` 和 proto 文件。
+---
+
+## 6. 关键技术决策
+
+1. **JWT**：自定义 Claims（user_id, email, exp）；middleware 解析 `Authorization: Bearer xxx` 注入 ctx（key：`userIDCtxKey`）。
+2. **密码**：bcrypt（cost=10）。
+3. **tag 存储**：`posts.tags` 使用 PostgreSQL `text[]`（GORM: `pq.StringArray`）。
+4. **幂等点赞**：`post_likes` 联合主键 `(post_id, user_id)`；Like/Unlike 使用 `ON CONFLICT DO NOTHING` / `DELETE`，并事务中 `posts.like_count++/--`。
+5. **分页**：`page>=1, size∈[1,50]`，返回 `total` 以便前端分页。
+6. **id 类型**：全部 `int64`（GORM 自增）；proto 中用 `int64`。
+7. **time**：数据库 `TIMESTAMPTZ`；proto 用 `google.protobuf.Timestamp`。
+
+---
+
+## 7. 分工（与 team-lead 约定一致）
+
+- **architect**：本设计 + schema.sql + api/blog/v1/* + go.mod
+- **developer_1**：internal/biz/ + internal/data/
+- **developer_2**：conf + server + service + cmd + wire
+- **tester**：tests/integration/（testcontainers-go + PostgreSQL）
+
+---
+
+## 8. 验收目标
+
+- `go mod tidy && go build ./...` 通过
+- `go test ./internal/biz/...` biz 单测通过
+- 每人输出 `report-*.md`

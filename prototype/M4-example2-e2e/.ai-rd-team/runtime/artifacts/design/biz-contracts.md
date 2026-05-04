@@ -1,222 +1,173 @@
-# BlogAPI biz 层契约
+# biz 层契约（给 developer_1）
 
-> Owner: architect
-> 配套：`spec-design.md`（架构） + `data-interfaces.yaml`（结构化契约，机器可读）
-> 本文档用于人读，聚焦 biz/data 边界。**字段/签名如与 `data-interfaces.yaml` 冲突，以 yaml 为准。**
+> 规则：
+> - biz 层**禁止 import gorm**
+> - biz 只依赖 repo 接口（data 层实现）
+> - 所有错误走 `api/blog/v1` 的 kratos errors（如 `v1.ErrorPostNotFound(...)`）
+> - DO 结构体放在 `internal/biz/*.go`
+> - ctx 中的 user_id 约定：`biz.UserIDCtxKey`，值类型 int64
 
 ---
 
-## 1. 领域模型（`internal/biz` 纯 struct，无 gorm tag）
+## 1. Domain Object（DO）
 
 ```go
-package biz
-
-import "time"
-
+// internal/biz/user.go
 type User struct {
     ID           int64
-    Email        string  // 入库前 strings.ToLower
-    PasswordHash string  // 对外返回时必须置空
+    Email        string
+    PasswordHash string
     Nickname     string
     CreatedAt    time.Time
     UpdatedAt    time.Time
 }
 
+// internal/biz/post.go
 type Post struct {
-    ID           int64
-    AuthorID     int64
-    Title        string
-    BodyMarkdown string
-    Tags         []string  // 非 nil；无标签则 []string{}
-    LikesCount   int64
-    CreatedAt    time.Time
-    UpdatedAt    time.Time
+    ID        int64
+    AuthorID  int64
+    Title     string
+    Body      string
+    Tags      []string
+    LikeCount int64
+    CreatedAt time.Time
+    UpdatedAt time.Time
 }
 
+// internal/biz/comment.go
 type Comment struct {
     ID        int64
     PostID    int64
     AuthorID  int64
-    Content   string
+    Body      string
     CreatedAt time.Time
 }
 ```
-
-> **data 层在返回前必须把 PO 映射为上述 biz 模型。** 禁止把 GORM 的 `*gorm.Model` 或 PO 结构体泄漏到 biz。
 
 ---
 
 ## 2. Repo 接口（biz 定义，data 实现）
 
 ```go
-package biz
-
-import "context"
-
+// internal/biz/user.go
 type UserRepo interface {
     Create(ctx context.Context, u *User) (*User, error)
     GetByID(ctx context.Context, id int64) (*User, error)
     GetByEmail(ctx context.Context, email string) (*User, error)
 }
 
+// internal/biz/post.go
 type PostRepo interface {
     Create(ctx context.Context, p *Post) (*Post, error)
     GetByID(ctx context.Context, id int64) (*Post, error)
-    Update(ctx context.Context, p *Post) (*Post, error)
+    Update(ctx context.Context, p *Post) error
     Delete(ctx context.Context, id int64) error
-    // tag 为空字符串表示不过滤；返回 total 用于分页
     List(ctx context.Context, page, size int32, tag string) ([]*Post, int64, error)
-
-    // AddLike 返回 added=true 表示本次确实插入了新记录并已把 likes_count+1
-    // added=false 表示用户已点过赞（幂等 no-op）
-    AddLike(ctx context.Context, postID, userID int64) (added bool, err error)
-    // 对称地，removed=true 表示本次确实删除了记录并已把 likes_count-1
-    RemoveLike(ctx context.Context, postID, userID int64) (removed bool, err error)
 }
 
+type PostLikeRepo interface {
+    // Add: 新增点赞（已存在则返回 false, nil，同时 posts.like_count 不变；新增则 +1）
+    Add(ctx context.Context, postID, userID int64) (added bool, err error)
+    // Remove: 取消点赞（不存在返回 false, nil；存在则 -1）
+    Remove(ctx context.Context, postID, userID int64) (removed bool, err error)
+}
+
+// internal/biz/comment.go
 type CommentRepo interface {
     Create(ctx context.Context, c *Comment) (*Comment, error)
-    ListByPost(ctx context.Context, postID int64, page, size int32) ([]*Comment, int64, error)
+    ListByPost(ctx context.Context, postID int64) ([]*Comment, error)
 }
 ```
 
-### 约束
-
-- Repo 方法**只接受 biz 模型**；返回时字段（`PasswordHash` 除外）必须填充。
-- `List*` 的分页参数：`page` 从 1 起，`size` ≤ 100；由 usecase 做边界校正，Repo 只负责按传入值 LIMIT/OFFSET。
-- DB 错误统一包装为 `errors.New(500, "INTERNAL", msg)`；业务语义错误（如未找到）由 usecase 根据 `gorm.ErrRecordNotFound` 翻译。
-
 ---
 
-## 3. Usecase（业务规则）
+## 3. Usecase 方法签名
 
 ```go
-// UserUsecase
-func NewUserUsecase(repo UserRepo, issuer *auth.JWTIssuer, logger log.Logger) *UserUsecase
+// internal/biz/user.go
+type UserUsecase struct { repo UserRepo; jwtSecret string; log *log.Helper }
 
-(u *UserUsecase) Register(ctx, email, password, nickname string) (*User, error)
-  - 校验 email 格式、密码长度≥6、nickname 1..50
-  - email 已存在 → errors.Conflict("USER_EMAIL_EXISTS", ...)
-  - bcrypt Hash（cost 来自配置，测试环境传 4）
-  - 返回的 User.PasswordHash 必须置空
+func NewUserUsecase(repo UserRepo, bc *conf.Auth, logger log.Logger) *UserUsecase
 
-(u *UserUsecase) Login(ctx, email, password string) (token string, user *User, err error)
-  - 找不到 or 密码错 → errors.Unauthorized("INVALID_CREDENTIALS", ...)
-  - 签 JWT (sub=user.ID, exp=now+AccessTTL)
-  - user.PasswordHash 必须置空
+func (uc *UserUsecase) Register(ctx context.Context, email, password, nickname string) (*User, error)
+func (uc *UserUsecase) Login(ctx context.Context, email, password string) (token string, u *User, err error)
+func (uc *UserUsecase) GetByID(ctx context.Context, id int64) (*User, error)
 
-(u *UserUsecase) Get(ctx, id int64) (*User, error)
-  - 不存在 → errors.NotFound("USER_NOT_FOUND", ...)
+// internal/biz/post.go
+type PostUsecase struct { pr PostRepo; lr PostLikeRepo; log *log.Helper }
 
-// PostUsecase
-(u *PostUsecase) Create(ctx, authorID, title, body, tags) (*Post, error)
-  - title 1..200；body 非空；tags 去重 + 小写 + len ≤ 10；每个 tag 1..30
-(u *PostUsecase) Update(ctx, operatorID, postID, title, body, tags) (*Post, error)
-  - 先 GetByID；post.AuthorID != operatorID → errors.Forbidden("FORBIDDEN", ...)
-(u *PostUsecase) Delete(ctx, operatorID, postID) error
-  - 同 Update 的权限校验；成功后依赖 ON DELETE CASCADE 清理 comments/post_likes
-(u *PostUsecase) Like(ctx, postID, userID) error
-  - 幂等：Repo 返回 added=false 时也视为成功
-(u *PostUsecase) Unlike(ctx, postID, userID) error
-  - 幂等：removed=false 时也视为成功
+func NewPostUsecase(pr PostRepo, lr PostLikeRepo, logger log.Logger) *PostUsecase
 
-// CommentUsecase
-(u *CommentUsecase) Create(ctx, postID, authorID, content) (*Comment, error)
-  - content 1..2000；postID 不存在 → POST_NOT_FOUND
-(u *CommentUsecase) ListByPost(ctx, postID, page, size) ([]*Comment, int64, error)
+func (uc *PostUsecase) Create(ctx context.Context, authorID int64, title, body string, tags []string) (*Post, error)
+func (uc *PostUsecase) Get(ctx context.Context, id int64) (*Post, error)
+func (uc *PostUsecase) List(ctx context.Context, page, size int32, tag string) ([]*Post, int64, error)
+func (uc *PostUsecase) Update(ctx context.Context, authorID, id int64, title, body string, tags []string) (*Post, error)
+func (uc *PostUsecase) Delete(ctx context.Context, authorID, id int64) error
+func (uc *PostUsecase) Like(ctx context.Context, postID, userID int64) error   // 幂等
+func (uc *PostUsecase) Unlike(ctx context.Context, postID, userID int64) error // 幂等
+
+// internal/biz/comment.go
+type CommentUsecase struct { cr CommentRepo; pr PostRepo; log *log.Helper }
+
+func NewCommentUsecase(cr CommentRepo, pr PostRepo, logger log.Logger) *CommentUsecase
+
+func (uc *CommentUsecase) Create(ctx context.Context, postID, authorID int64, body string) (*Comment, error)
+func (uc *CommentUsecase) ListByPost(ctx context.Context, postID int64) ([]*Comment, error)
 ```
 
 ---
 
-## 4. 统一错误码（和 service 层直通）
+## 4. 错误语义（必须用 `v1` 包错误）
 
-| reason                | 层       | HTTP | 触发点                                  |
-| --------------------- | -------- | ---- | --------------------------------------- |
-| VALIDATION_FAILED     | biz/svc  | 400  | 参数非法                                |
-| UNAUTHORIZED          | middleware | 401 | 无 token / token 过期                   |
-| INVALID_CREDENTIALS   | biz      | 401  | 登录失败                                |
-| FORBIDDEN             | biz      | 403  | 非作者改/删文章                         |
-| USER_NOT_FOUND        | biz      | 404  | GetByID 未命中                          |
-| POST_NOT_FOUND        | biz      | 404  | 文章查/改/删/评论/点赞时未命中          |
-| COMMENT_NOT_FOUND     | biz      | 404  | 预留（本期无单条查询）                  |
-| USER_EMAIL_EXISTS     | biz      | 409  | 注册冲突                                |
-
-**用法**：
-
-```go
-import kerr "github.com/go-kratos/kratos/v2/errors"
-
-return nil, kerr.Conflict("USER_EMAIL_EXISTS", "email already registered")
-return nil, kerr.Forbidden("FORBIDDEN", "only author can update this post")
-return nil, kerr.NotFound("POST_NOT_FOUND", "post %d not found", id)
-return nil, kerr.BadRequest("VALIDATION_FAILED", "title length must be 1..200")
-```
+- `Register`：邮箱已存在 → `v1.ErrorUserAlreadyExists`；校验失败 → `v1.ErrorValidationFailed`。
+- `Login`：邮箱不存在或密码错 → 统一 `v1.ErrorUserCredentialInvalid`。
+- `GetByID`：不存在 → `v1.ErrorUserNotFound`。
+- `Post.Get/Update/Delete/Like/Unlike/Comment.Create`：`post_id` 不存在 → `v1.ErrorPostNotFound`。
+- `Update/Delete`：`authorID != post.AuthorID` → `v1.ErrorPostForbidden`。
+- 非业务错误（DB 等）：返回原 error，由 service 兜底转 `v1.ErrorInternalError`。
 
 ---
 
-## 5. ProviderSet（wire）
+## 5. ProviderSet
 
 ```go
 // internal/biz/biz.go
-var ProviderSet = wire.NewSet(
-    NewUserUsecase,
-    NewPostUsecase,
-    NewCommentUsecase,
-)
+var ProviderSet = wire.NewSet(NewUserUsecase, NewPostUsecase, NewCommentUsecase)
 
 // internal/data/data.go
-var ProviderSet = wire.NewSet(
-    NewData,
-    NewUserRepo,   // 返回 biz.UserRepo
-    NewPostRepo,
-    NewCommentRepo,
-)
+var ProviderSet = wire.NewSet(NewData, NewUserRepo, NewPostRepo, NewCommentRepo, NewPostLikeRepo)
 ```
-
-data.NewData 签名：
-
-```go
-func NewData(c *conf.Data, logger log.Logger) (*Data, func(), error)
-```
-
-cleanup 函数关闭数据库连接。
 
 ---
 
-## 6. 事务封装（data 内部工具）
+## 6. conf.Auth（biz 依赖）
 
 ```go
-// internal/data/data.go
-type Data struct{ db *gorm.DB }
-
-// contextKey 用于把 tx 注入 context
-type txKey struct{}
-
-func (d *Data) withTx(ctx context.Context) *gorm.DB {
-    if tx, ok := ctx.Value(txKey{}).(*gorm.DB); ok {
-        return tx
-    }
-    return d.db.WithContext(ctx)
-}
-
-func (d *Data) Transaction(ctx context.Context, fn func(context.Context) error) error {
-    return d.db.Transaction(func(tx *gorm.DB) error {
-        return fn(context.WithValue(ctx, txKey{}, tx))
-    })
+// internal/conf/conf.go
+type Auth struct {
+    JWTSecret string        `yaml:"jwt_secret"`
+    Expire    time.Duration `yaml:"expire"` // e.g. 24h
 }
 ```
 
-**谁用事务**：
+Bootstrap 结构大致：
 
-- `PostRepo.AddLike / RemoveLike`：内部自己 `db.Transaction`（本 Repo 内两条 SQL 同事务即可，无需 usecase 介入）。
-- `PostUsecase.Delete`：依赖 DB 级 CASCADE，不需要显式事务。
+```go
+type Bootstrap struct {
+    Server *Server
+    Data   *Data
+    Auth   *Auth
+}
+```
 
 ---
 
-## 7. 验收（developer_1 自测清单）
+## 7. 单测建议（developer_1 必交付）
 
-- [ ] `go build ./internal/biz/... ./internal/data/...` 通过
-- [ ] `biz` 包不 import `gorm.io/gorm`、不 import `github.com/go-kratos/kratos/v2/transport/*`
-- [ ] `data` 包不 import 任何 `internal/service` 或 `internal/server`
-- [ ] 所有 Repo 方法都有 `err == gorm.ErrRecordNotFound` 的分支（在 biz 层转成领域错误）
-- [ ] 幂等 Like/Unlike 连续调两次，第二次不产生错误
+biz 层 usecase 必须配 mock repo 的单测，覆盖：
+
+- Register 邮箱已存在 / 成功
+- Login 密码错 / 成功（token 非空）
+- Post.Create / List(tag 过滤) / Update 非作者拒绝
+- Like 幂等：连续 Add 两次只 +1
+- Comment.Create 当 post 不存在时 `ErrorPostNotFound`

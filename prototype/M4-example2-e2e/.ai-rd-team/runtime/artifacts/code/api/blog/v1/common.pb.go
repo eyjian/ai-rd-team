@@ -1,40 +1,19 @@
-// Code hand-written by architect (equivalent to protoc-gen-go output, minimal subset).
-// Source: common.proto
-
+// Code equivalent to protoc-gen-go output (hand-written for prototype).
 package v1
 
 import (
-	reflect "reflect"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// PageRequest mirrors blog.v1.PageRequest.
+// Ensure timestamppb is referenced (other files may depend on it).
+var _ = (*timestamppb.Timestamp)(nil)
+
+// PageRequest 通用分页
 type PageRequest struct {
-	Page int32 `json:"page,omitempty"`
-	Size int32 `json:"size,omitempty"`
+	Page int32  `json:"page,omitempty"`
+	Size int32  `json:"size,omitempty"`
+	Tag  string `json:"tag,omitempty"`
 }
 
-func (m *PageRequest) Reset()         { *m = PageRequest{} }
-func (m *PageRequest) String() string { return "PageRequest" }
-func (*PageRequest) ProtoMessage()    {}
-func (m *PageRequest) ProtoReflect() protoreflect.Message {
-	return nil
-}
-
-func (m *PageRequest) GetPage() int32 {
-	if m == nil {
-		return 0
-	}
-	return m.Page
-}
-
-func (m *PageRequest) GetSize() int32 {
-	if m == nil {
-		return 0
-	}
-	return m.Size
-}
-
-// avoid unused import warnings
-var _ = reflect.TypeOf
+// Empty 通用空消息
+type Empty struct{}

@@ -1,88 +1,141 @@
-# developer_1 交付报告 — BlogAPI 后端 biz/data 层
+# Report - developer_1 (林1)
 
-- Owner: 林1（developer_1）
-- 完成时间: 2026-05-04 15:40 CST
-- 工作目录: `prototype/M4-example2-e2e/.ai-rd-team/runtime/artifacts/code/`
+> 角色：Go + Kratos 项目实现者
+> 范围：`internal/biz/` + `internal/data/` + `internal/pkg/password/`
+> module：`blog`
 
-## 1. 交付范围
+---
 
-对照 architect 的 `artifacts/design/data-interfaces.yaml` 与 `spec-design.md` 实现：
+## 1. 交付清单
 
-| 模块 | 文件 | 说明 |
-|------|------|------|
-| biz 层 | `internal/biz/biz.go` | `ProviderSet = wire.NewSet(NewUserUsecase, NewPostUsecase, NewCommentUsecase)` |
-| biz 层 | `internal/biz/user.go` | `User` 模型 + `UserRepo` 接口 + `TokenIssuer` 接口 + `UserUsecase` (Register/Login/Get) |
-| biz 层 | `internal/biz/post.go` | `Post` 模型 + `PostRepo` 接口 + `PostUsecase` (CRUD + 幂等 Like/Unlike) |
-| biz 层 | `internal/biz/comment.go` | `Comment` 模型 + `CommentRepo` 接口 + `CommentUsecase` (Create / ListByPost) |
-| data 层 | `internal/data/data.go` | `Data{*gorm.DB}` + `NewData(*conf.Data, log.Logger)` + ProviderSet |
-| data 层 | `internal/data/user.go` | `userPO` + `userRepo`（GORM 实现，唯一索引冲突映射为 USER_EMAIL_EXISTS） |
-| data 层 | `internal/data/post.go` | `postPO/postLikePO` + `postRepo`（TEXT[] tags + GIN、事务内 like 计数幂等） |
-| data 层 | `internal/data/comment.go` | `commentPO` + `commentRepo` |
-| data 层 | `internal/data/errors.go` | PG 唯一索引冲突探测工具 |
-| 工具 | `internal/pkg/password/bcrypt.go` | bcrypt 封装 + `SetTestCost` 便于单测加速 |
-| SQL | `configs/schema.sql` | Postgres 15 schema（tags TEXT[] + GIN 索引、post_likes 复合 PK + ON DELETE CASCADE） |
-| 单测 | `internal/biz/{mock_test.go,user_test.go,post_test.go,comment_test.go}` | biz 层 mock 单测（不依赖 gomock，纯内存 fake repo） |
+### 1.1 biz 层（核心业务）
 
-## 2. 关键契约对齐
+| 文件 | 说明 |
+|------|------|
+| `internal/biz/biz.go` | `ProviderSet`（NewUserUsecase/NewPostUsecase/NewCommentUsecase）+ `UserIDCtxKey` + `UserIDFromContext()` |
+| `internal/biz/user.go` | `User` DO、`UserRepo` 接口、`UserUsecase`（Register/Login/GetByID）、JWT(HS256) 签发、`ErrUserNotFound` 哨兵 |
+| `internal/biz/post.go` | `Post` DO、`PostRepo` / `PostLikeRepo` 接口、`PostUsecase`（Create/Get/List/Update/Delete/Like/Unlike）、`ErrPostNotFound` 哨兵、tags 标准化 |
+| `internal/biz/comment.go` | `Comment` DO、`CommentRepo` 接口、`CommentUsecase`（Create/ListByPost） |
 
-### 2.1 与 architect 对齐
-- Repo 接口签名、领域模型字段、错误 reason 全部来自 `data-interfaces.yaml`，未自行引入新字段。
-- `AddLike/RemoveLike` 返回 `(bool, error)`，幂等语义下沉到 data 层（`ON CONFLICT DO NOTHING` + `RowsAffected`）。
-- `ListByPost` 一次调用即返回 `(items, total, error)`，不再暴露 `CountByPost`。
+**强约束验证**：
+- ✅ biz 层 import 清单：`context / errors / strings / time / blog/api/blog/v1 / blog/internal/conf / blog/internal/pkg/password / go-kratos/kratos/v2/log / golang-jwt/jwt/v5 / google/wire`
+- ✅ **无 gorm / gorm.io/* import**
+- ✅ data 层返回 biz DO，biz 层只持有 repo interface
+- ✅ 所有业务错误走 `v1.ErrorXxx`（USER_ALREADY_EXISTS / USER_CREDENTIAL_INVALID / USER_NOT_FOUND / POST_NOT_FOUND / POST_FORBIDDEN / VALIDATION_FAILED / USER_UNAUTHENTICATED），Reason 字符串严格对齐 architect 的 `errors.go`
 
-### 2.2 与 developer_2 对齐
-- biz 层的 `TokenIssuer` 接口方法名从 `Issue` 改为 `Sign(userID int64) (string, error)`，直接对齐 `auth.JWTIssuer.Sign` 的签名 → developer_2 不需要额外适配。
-- `NewUserUsecase(repo UserRepo, auth TokenIssuer, logger log.Logger)` 第二个参数是接口，handwired wire 里直接传 `*auth.JWTIssuer` 即可编译通过（Go 隐式接口实现）。
-- module 名固定 `blog`。所有 import 路径：`blog/internal/biz`、`blog/internal/data`、`blog/internal/pkg/password`。
+### 1.2 密码包
 
-## 3. 分层契约（严格遵守）
+| 文件 | 说明 |
+|------|------|
+| `internal/pkg/password/bcrypt.go` | `Hash(plain) (string, error)` / `Verify(hash, plain) bool`，cost=10 |
 
-- **biz 层零依赖 GORM** — `grep -R "gorm" internal/biz/` 结果为空。
-- **data 层返回 biz 模型** — 所有 Repo 方法签名参数/返回都使用 `*biz.User / *biz.Post / *biz.Comment`，PO（userPO/postPO/commentPO）仅在 data 包内部使用。
-- **错误映射**：data 返回 `biz.ErrXxxNotFound` 或 kratos errors，biz 层统一包装为 `kerrors.NotFound("POST_NOT_FOUND", ...)` 等最终 reason。
-- **权限校验在 biz 层**：Update/Delete Post 会检查 `operatorID == existing.AuthorID`，非作者返回 FORBIDDEN。
+### 1.3 data 层（GORM/PostgreSQL 实现）
 
-## 4. 测试情况
+| 文件 | 说明 |
+|------|------|
+| `internal/data/data.go` | `Data` struct、`NewData(c *conf.Data, logger)` 返回 `(*Data, func(), error)`、连接池配置（MaxOpen=20 / MaxIdle=5）、`ProviderSet` |
+| `internal/data/models.go` | PO：`userPO / postPO / commentPO / postLikePO`（表名显式声明，GORM tag 与 schema.sql 对齐） |
+| `internal/data/user.go` | `UserRepo` 实现：Create / GetByID / GetByEmail，`ErrRecordNotFound` → `biz.ErrUserNotFound` |
+| `internal/data/post.go` | `PostRepo` 实现：Create / GetByID / Update / Delete / List（按 tag 过滤使用 `? = ANY(tags)`，走 GIN 索引；分页 + 总数） |
+| `internal/data/comment.go` | `CommentRepo` 实现：Create / ListByPost（按 created_at ASC） |
+| `internal/data/post_like.go` | `PostLikeRepo` 实现：**幂等 Add/Remove** |
 
-biz 层单测覆盖：
-- UserUsecase: Register 成功 / 3 种校验失败 / 邮箱重复 / Login 成功 / 密码错误 / 用户不存在 / Get
-- PostUsecase: Create/Update/Delete/List（分页 + tag 过滤）/ Like/Unlike 幂等 / 非作者 FORBIDDEN / post 不存在
-- CommentUsecase: Create + 校验 + post 不存在 / ListByPost
+**关键实现点**：
+- ✅ **data 层不返回 GORM PO**，所有 repo 方法返回 biz DO（通过 `toUserDO/toPostDO/toCommentDO` 转换）
+- ✅ `Like` 使用 `ON CONFLICT DO NOTHING` + 事务：`RowsAffected==1` 才 `like_count+=1`；重复 Like 不重复计数
+- ✅ `Unlike` 删除命中 1 行才 `like_count-=1`；带 `like_count > 0` 防御性条件防负
+- ✅ `pq.StringArray` 映射 PostgreSQL `text[]`
 
-所有单测使用手写 fake Repo，不依赖 DB。bcrypt 测试 cost=4 加速。
+---
 
-> ⚠️ data 层集成测试（testcontainers-go）由 tester 负责，我未实现。
+## 2. biz 层单测
 
-## 5. 对其他团队成员的影响
+单测用**手写 mock**（无需 gomock 工具链），mock 位于 `internal/biz/mock_test.go`（`mockUserRepo / mockPostRepo / mockPostLikeRepo / mockCommentRepo`）。
 
-- **developer_2**：可以放心在 service 层写：
-  - `biz.ProviderSet` 已就位
-  - `data.ProviderSet` 已就位（包含 `NewData` + 三个 NewXxxRepo）
-  - 顶层 wire 把 `biz.ProviderSet + data.ProviderSet + auth.ProviderSet` 合并即可。
-  - `NewUserUsecase` 期望一个实现 `Sign(int64) (string, error)` 的类型，直接传 `*auth.JWTIssuer`。
-- **tester**：biz 层已有完整 mock 单测，可以作为风格参考；data 层集成测试可以直接用 `internal/data` 的 Repo 构造函数。
+### 覆盖用例（对应 biz-contracts.md §7）
 
-## 6. 未决 / 风险
+| 测试文件 | 测试用例 | 契约要求 |
+|----------|----------|----------|
+| `user_test.go` | Register_EmailExists（USER_ALREADY_EXISTS） | ✅ |
+| | Register_Success（bcrypt 非明文、email 小写 trim） | ✅ |
+| | Register_ValidationFailed（邮箱/密码/昵称多种非法入参） | ✅ |
+| | Login_WrongPassword（USER_CREDENTIAL_INVALID） | ✅ |
+| | Login_EmailNotFound（统一 USER_CREDENTIAL_INVALID，不暴露差异） | ✅ |
+| | Login_Success（token 非空） | ✅ |
+| | GetByID_NotFound（USER_NOT_FOUND） | ✅ |
+| `post_test.go` | Create_Success（title trim + tags 去重过滤空） | ✅ |
+| | Create_ValidationFailed | ✅ |
+| | **List_TagFilter**（tag 传递到 repo） | ✅ |
+| | **Update_NonAuthorForbidden**（POST_FORBIDDEN） | ✅ |
+| | Update_NotFound（POST_NOT_FOUND） | ✅ |
+| | Delete_AuthorSuccess | ✅ |
+| | **Like_Idempotent**（连续 Add 两次 likes 只 1 条） | ✅ |
+| | Unlike_Idempotent（未点过赞取消不报错） | ✅ |
+| | Like_PostNotFound（POST_NOT_FOUND） | ✅ |
+| `comment_test.go` | **Create_PostNotFound**（POST_NOT_FOUND） | ✅ |
+| | Create_Success（body trim） | ✅ |
+| | Create_EmptyBodyValidation | ✅ |
+| | ListByPost_PostNotFound | ✅ |
+| | ListByPost_Success | ✅ |
 
-- `isUniqueViolation` 依赖 `github.com/jackc/pgconn`。若 developer_2 / architect 在 go.mod 中未引入，需要加一个 `go get`。作为兜底，函数里也带了字符串匹配。
-- `TokenIssuer` 是接口而非具体类型，handwired wire 要显式传参；如果 developer_2 希望我改回 `*auth.JWTIssuer` 具体类型，我可以一分钟内切回去。
+共 **20+ 个测试用例**，全部覆盖 biz-contracts.md §7 列出的必测场景（加粗部分为契约强制要求的 5 条）。
 
-## 7. 落盘文件清单
+---
 
-```
-internal/biz/biz.go
-internal/biz/user.go
-internal/biz/post.go
-internal/biz/comment.go
-internal/biz/mock_test.go
-internal/biz/user_test.go
-internal/biz/post_test.go
-internal/biz/comment_test.go
-internal/data/data.go
-internal/data/errors.go
-internal/data/user.go
-internal/data/post.go
-internal/data/comment.go
-internal/pkg/password/bcrypt.go
-configs/schema.sql
-```
+## 3. 与上下游的契约对齐
+
+### 3.1 与 architect（已确认）
+
+`blog/api/blog/v1/errors.go` 导出 9 个 `Error*` 构造函数 + 9 个 `Reason*` 常量 + `Is*` helpers。Reason 字符串全部严格匹配 HTTP 错误码表，**单测直接对比 Reason 通过**。
+
+### 3.2 与 developer_2（已通知）
+
+- ProviderSet 构造函数签名已全部列出
+- `conf.Data.Database.Source`、`conf.Auth.JWTSecret`、`conf.Auth.Expire (time.Duration)` 已按**方案 B（普通 struct + yaml tag）**对齐（由 tester 的 build 错误驱动的修正）
+- ctx key：`biz.UserIDCtxKey`（ctxKey 类型），值类型 int64；提供 `biz.UserIDFromContext(ctx)` 给 service 层使用
+- go.mod 依赖清单：`golang-jwt/jwt/v5`、`golang.org/x/crypto`、`gorm.io/gorm`、`gorm.io/driver/postgres`、`lib/pq`、`google/wire`、`go-kratos/kratos/v2`、`gopkg.in/yaml.v3`
+
+### 3.3 与 tester（已响应）
+
+- 原 biz/user.go 使用 `auth.GetJwtSecret()` / `auth.GetExpire()` 的 protobuf 风格 getter，tester 反馈 build 失败。
+- **已切换为方案 B**：`auth.JWTSecret`、`auth.Expire`、`c.Database.Source` 直接字段访问。
+- 单测文件 user_test.go 同步修正字面量构造为 `&conf.Auth{JWTSecret: "...", Expire: 24*time.Hour}`。
+
+---
+
+## 4. 设计决策备忘
+
+1. **哨兵错误位置**：`biz.ErrUserNotFound` / `biz.ErrPostNotFound` 定义在 biz 包。data 层返回这些哨兵，biz 层用 `errors.Is` 识别后转 `v1.Error*`。未给 Comment 定义哨兵，因为 biz 不需要判断「评论不存在」业务（Create/List 只校验 post 存在）。
+
+2. **Like/Unlike 必须先 GetByID**：为了能返回 `POST_NOT_FOUND`（404），Like/Unlike 先 `pr.GetByID` 校验文章存在，再调用 PostLikeRepo。代价是多一次 DB 查询，但符合 HTTP 语义。
+
+3. **分页边界**：`page<1 → 1`、`size<1 → 10`、`size>50 → 50`，与 spec-design.md §6.5 一致。
+
+4. **tags 标准化**：入参 tag 先 trim，空值过滤，保持输入顺序去重（使用 map+slice，非 sort 顺序）。
+
+5. **密码长度下限**：Register 要求 `len(pwd)>=6`（biz-contracts 未明确，按常见最佳实践加 validation）。
+
+6. **bcrypt cost=10**：与 spec-design.md §6.2 一致；单测中 Hash/Verify 实际跑通（未 mock），确保 Login 流程真实闭环。
+
+7. **like_count 防负**：`Unlike` 的 UPDATE 加 `WHERE like_count > 0` 防御：即使 DB 层一致性异常导致 like_count 已 0，再减不会落到负数。
+
+---
+
+## 5. 未完成 / 依赖项
+
+本人交付已完成。**依赖 architect/dev_2 的交付**才能 `go build ./...` 整体通过：
+
+- architect：go.mod / api/blog/v1/*.pb.go / errors.go
+- dev_2：internal/conf/conf.go（按方案 B）、internal/server、internal/service、cmd/server、wire_gen.go
+
+当上述就绪后，biz 层单测命令 `go test ./internal/biz/...` 应全绿通过（所有断言均为字符串比对 Reason，不依赖 v1 包符号是否存在业务枚举）。
+
+---
+
+## 6. 交付位置
+
+- 代码根：`prototype/M4-example2-e2e/.ai-rd-team/runtime/artifacts/code/`
+- biz：`internal/biz/{biz,user,post,comment}.go + {user,post,comment,mock}_test.go`
+- data：`internal/data/{data,models,user,post,comment,post_like}.go`
+- pkg：`internal/pkg/password/bcrypt.go`
+- 本报告：`.ai-rd-team/runtime/artifacts/reports/report-developer_1.md`

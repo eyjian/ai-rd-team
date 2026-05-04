@@ -7,54 +7,64 @@ import (
 	"blog/internal/biz"
 	"blog/internal/pkg/auth"
 
+	"github.com/go-kratos/kratos/v2/log"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// CommentService adapts v1.CommentServiceServer to biz.CommentUsecase.
+// CommentService 评论协议层
 type CommentService struct {
-	v1.UnimplementedCommentServiceServer
-	uc *biz.CommentUsecase
+	v1.UnimplementedCommentServer
+
+	uc  *biz.CommentUsecase
+	log *log.Helper
 }
 
-// NewCommentService constructor.
-func NewCommentService(uc *biz.CommentUsecase) *CommentService {
-	return &CommentService{uc: uc}
+func NewCommentService(uc *biz.CommentUsecase, logger log.Logger) *CommentService {
+	return &CommentService{uc: uc, log: log.NewHelper(logger)}
 }
 
-func (s *CommentService) CreateComment(ctx context.Context, req *v1.CreateCommentRequest) (*v1.Comment, error) {
-	uid, ok := auth.UserIDFromContext(ctx)
-	if !ok {
-		return nil, auth.ErrUnauthorized(v1.ReasonUnauthorized)
-	}
-	c, err := s.uc.Create(ctx, req.GetPostId(), uid, req.GetContent())
-	if err != nil {
-		return nil, err
-	}
-	return toPBComment(c), nil
-}
-
-func (s *CommentService) ListComments(ctx context.Context, req *v1.ListCommentsRequest) (*v1.ListCommentsReply, error) {
-	page, size := req.GetPage(), req.GetSize()
-	list, total, err := s.uc.ListByPost(ctx, req.GetPostId(), page, size)
-	if err != nil {
-		return nil, err
-	}
-	items := make([]*v1.Comment, 0, len(list))
-	for _, c := range list {
-		items = append(items, toPBComment(c))
-	}
-	return &v1.ListCommentsReply{Items: items, Total: total}, nil
-}
-
-func toPBComment(c *biz.Comment) *v1.Comment {
+func commentToReply(c *biz.Comment) *v1.CommentReply {
 	if c == nil {
 		return nil
 	}
-	return &v1.Comment{
+	return &v1.CommentReply{
 		Id:        c.ID,
 		PostId:    c.PostID,
 		AuthorId:  c.AuthorID,
-		Content:   c.Content,
+		Body:      c.Body,
 		CreatedAt: timestamppb.New(c.CreatedAt),
 	}
+}
+
+func (s *CommentService) Create(ctx context.Context, req *v1.CreateCommentRequest) (*v1.CommentReply, error) {
+	uid, err := auth.MustUserIDFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req.PostId <= 0 {
+		return nil, v1.ErrorValidationFailed("invalid post_id")
+	}
+	if req.Body == "" {
+		return nil, v1.ErrorValidationFailed("body required")
+	}
+	c, err := s.uc.Create(ctx, req.PostId, uid, req.Body)
+	if err != nil {
+		return nil, err
+	}
+	return commentToReply(c), nil
+}
+
+func (s *CommentService) List(ctx context.Context, req *v1.ListCommentRequest) (*v1.ListCommentReply, error) {
+	if req.PostId <= 0 {
+		return nil, v1.ErrorValidationFailed("invalid post_id")
+	}
+	list, err := s.uc.ListByPost(ctx, req.PostId)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]*v1.CommentReply, 0, len(list))
+	for _, c := range list {
+		items = append(items, commentToReply(c))
+	}
+	return &v1.ListCommentReply{Items: items}, nil
 }

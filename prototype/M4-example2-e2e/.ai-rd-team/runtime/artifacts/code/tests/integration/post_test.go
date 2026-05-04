@@ -3,251 +3,174 @@ package integration
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"testing"
 )
 
-// postDTO mirrors the JSON shape of a Post returned by the API. Only the
-// fields the tests actually assert on are declared; unknown fields are
-// ignored by encoding/json so the suite is tolerant of additional columns
-// (e.g. updated_at) being added later.
-type postDTO struct {
-	Id           int64    `json:"id"`
-	AuthorId     int64    `json:"author_id"`
-	Title        string   `json:"title"`
-	BodyMarkdown string   `json:"body_markdown"`
-	Tags         []string `json:"tags"`
-	LikesCount   int64    `json:"likes_count"`
-}
+// TestPostCRUDAndList 覆盖：创建 / 获取 / 更新（作者/非作者）/ 列表分页+tag 过滤 / 删除
+func TestPostCRUDAndList(t *testing.T) {
+	requireAppReady(t)
+	setupTestDB(t)
 
-type postListDTO struct {
-	Items []postDTO `json:"items"`
-	Total int64     `json:"total"`
-}
+	author := createTestUser(t, "author")
+	other := createTestUser(t, "other")
 
-// TestPost_CRUD covers the full CRUD happy-path on /v1/posts plus the
-// author-only authorization rule defined in data-interfaces.yaml.
-func TestPost_CRUD(t *testing.T) {
-	_ = setupTestDB(t)
-	client := newAPIClient(t)
-
-	author := createTestUser(t, client, uniqueEmail(t, "post-author"), "pw-aaaaaaa1", "author")
-	other := createTestUser(t, client, uniqueEmail(t, "post-other"), "pw-aaaaaaa1", "other")
-	authed := client.withToken(author.Token)
-	otherAuthed := client.withToken(other.Token)
-
-	// --- Create -----------------------------------------------------------
-	var created postDTO
-	t.Run("create by authed user returns 200 and populated post", func(t *testing.T) {
-		resp := authed.apiCall(http.MethodPost, "/v1/posts", map[string]interface{}{
-			"title":         "Hello Kratos",
-			"body_markdown": "# intro\nbody",
-			"tags":          []string{"go", "kratos"},
-		}, nil)
-		if resp.Status != http.StatusOK && resp.Status != http.StatusCreated {
-			t.Fatalf("want 200/201, got %d body=%s", resp.Status, resp.Body)
+	// Create
+	var postID int64
+	t.Run("create post ok", func(t *testing.T) {
+		r := apiCall(t, http.MethodPost, "/v1/posts", map[string]any{
+			"title": "hello",
+			"body":  "first body",
+			"tags":  []string{"go", "kratos"},
+		}, author.Token)
+		assertStatus(t, r, 200)
+		var p struct {
+			ID int64 `json:"id"`
 		}
-		if err := resp.decode(&created); err != nil {
-			t.Fatalf("decode: %v (%s)", err, resp.Body)
+		decode(t, r, &p)
+		if p.ID == 0 {
+			t.Fatalf("empty post id: %s", string(r.Body))
 		}
-		if created.Id == 0 || created.AuthorId != author.ID {
-			t.Errorf("unexpected created: %+v (author want %d)", created, author.ID)
+		postID = p.ID
+	})
+
+	// Create without auth -> 401
+	t.Run("create post unauthenticated", func(t *testing.T) {
+		r := apiCall(t, http.MethodPost, "/v1/posts", map[string]any{
+			"title": "x",
+			"body":  "y",
+		}, "")
+		assertStatus(t, r, 401)
+	})
+
+	// Get
+	t.Run("get post ok", func(t *testing.T) {
+		r := apiCall(t, http.MethodGet, fmt.Sprintf("/v1/posts/%d", postID), nil, "")
+		assertStatus(t, r, 200)
+		var p struct {
+			Title string   `json:"title"`
+			Tags  []string `json:"tags"`
 		}
-		if len(created.Tags) != 2 {
-			t.Errorf("tags lost: %+v", created.Tags)
+		decode(t, r, &p)
+		if p.Title != "hello" {
+			t.Fatalf("title=%q", p.Title)
 		}
 	})
 
-	t.Run("create without token -> 401 UNAUTHORIZED", func(t *testing.T) {
-		resp := client.apiCall(http.MethodPost, "/v1/posts", map[string]interface{}{
-			"title": "x", "body_markdown": "y", "tags": []string{},
-		}, nil)
-		if resp.Status != http.StatusUnauthorized {
-			t.Fatalf("want 401, got %d body=%s", resp.Status, resp.Body)
-		}
+	t.Run("get post not found", func(t *testing.T) {
+		r := apiCall(t, http.MethodGet, "/v1/posts/99999", nil, "")
+		assertStatus(t, r, 404)
+		assertReason(t, r, "POST_NOT_FOUND")
 	})
 
-	// --- Read -------------------------------------------------------------
-	t.Run("GET /v1/posts/{id} is public", func(t *testing.T) {
-		resp := client.apiCall(http.MethodGet, fmt.Sprintf("/v1/posts/%d", created.Id), nil, nil)
-		if resp.Status != http.StatusOK {
-			t.Fatalf("want 200, got %d body=%s", resp.Status, resp.Body)
-		}
-		var got postDTO
-		if err := resp.decode(&got); err != nil {
-			t.Fatalf("decode: %v", err)
-		}
-		if got.Id != created.Id || got.Title != "Hello Kratos" {
-			t.Errorf("round-trip mismatch: %+v", got)
-		}
+	// Update by non-author -> 403 POST_FORBIDDEN
+	t.Run("update by non-author forbidden", func(t *testing.T) {
+		r := apiCall(t, http.MethodPut, fmt.Sprintf("/v1/posts/%d", postID), map[string]any{
+			"title": "hijack",
+			"body":  "nope",
+			"tags":  []string{"go"},
+		}, other.Token)
+		assertStatus(t, r, 403)
+		assertReason(t, r, "POST_FORBIDDEN")
 	})
 
-	t.Run("GET non-existent post -> 404 POST_NOT_FOUND", func(t *testing.T) {
-		resp := client.apiCall(http.MethodGet, "/v1/posts/99999999", nil, nil)
-		if resp.Status != http.StatusNotFound {
-			t.Fatalf("want 404, got %d body=%s", resp.Status, resp.Body)
-		}
-		assertErrorReason(t, resp, "POST_NOT_FOUND")
+	// Update by author
+	t.Run("update by author ok", func(t *testing.T) {
+		r := apiCall(t, http.MethodPut, fmt.Sprintf("/v1/posts/%d", postID), map[string]any{
+			"title": "hello v2",
+			"body":  "updated",
+			"tags":  []string{"go", "golang"},
+		}, author.Token)
+		assertStatus(t, r, 200)
 	})
 
-	// --- Update -----------------------------------------------------------
-	t.Run("update by author succeeds", func(t *testing.T) {
-		resp := authed.apiCall(http.MethodPut, fmt.Sprintf("/v1/posts/%d", created.Id),
-			map[string]interface{}{
-				"title":         "Hello Kratos v2",
-				"body_markdown": "# updated",
-				"tags":          []string{"go"},
-			}, nil)
-		if resp.Status != http.StatusOK {
-			t.Fatalf("want 200, got %d body=%s", resp.Status, resp.Body)
-		}
-		var got postDTO
-		if err := resp.decode(&got); err != nil {
-			t.Fatalf("decode: %v", err)
-		}
-		if got.Title != "Hello Kratos v2" || len(got.Tags) != 1 {
-			t.Errorf("update not reflected: %+v", got)
-		}
-	})
-
-	t.Run("update by non-author -> 403 FORBIDDEN", func(t *testing.T) {
-		resp := otherAuthed.apiCall(http.MethodPut, fmt.Sprintf("/v1/posts/%d", created.Id),
-			map[string]interface{}{
-				"title":         "hijack",
-				"body_markdown": "nope",
-				"tags":          []string{},
-			}, nil)
-		if resp.Status != http.StatusForbidden {
-			t.Fatalf("want 403, got %d body=%s", resp.Status, resp.Body)
-		}
-		assertErrorReason(t, resp, "FORBIDDEN")
-	})
-
-	// --- Delete -----------------------------------------------------------
-	t.Run("delete by non-author -> 403", func(t *testing.T) {
-		resp := otherAuthed.apiCall(http.MethodDelete,
-			fmt.Sprintf("/v1/posts/%d", created.Id), nil, nil)
-		if resp.Status != http.StatusForbidden {
-			t.Fatalf("want 403, got %d body=%s", resp.Status, resp.Body)
-		}
-	})
-
-	t.Run("delete by author succeeds and subsequent GET returns 404", func(t *testing.T) {
-		resp := authed.apiCall(http.MethodDelete,
-			fmt.Sprintf("/v1/posts/%d", created.Id), nil, nil)
-		if resp.Status != http.StatusOK && resp.Status != http.StatusNoContent {
-			t.Fatalf("want 200/204, got %d body=%s", resp.Status, resp.Body)
-		}
-
-		get := client.apiCall(http.MethodGet,
-			fmt.Sprintf("/v1/posts/%d", created.Id), nil, nil)
-		if get.Status != http.StatusNotFound {
-			t.Fatalf("want 404 after delete, got %d body=%s", get.Status, get.Body)
-		}
-	})
-}
-
-// TestPost_ListAndTagFilter covers pagination bounds and the `tag` query
-// filter described in the spec (§4.4 and data-interfaces http_routes).
-//
-// Strategy: seed N posts with mixed tags in a single fresh DB, then hit
-// /v1/posts with various query combos and verify (a) total is correct,
-// (b) page size is honoured, (c) default size == 20, (d) max size == 100.
-func TestPost_ListAndTagFilter(t *testing.T) {
-	_ = setupTestDB(t)
-	client := newAPIClient(t)
-
-	author := createTestUser(t, client, uniqueEmail(t, "lister"), "pw-aaaaaaa1", "lister")
-	authed := client.withToken(author.Token)
-
-	// Seed 25 posts: 10 tagged "go", 10 tagged "py", 5 tagged both.
-	seed := func(title string, tags []string) {
-		resp := authed.apiCall(http.MethodPost, "/v1/posts", map[string]interface{}{
-			"title":         title,
-			"body_markdown": "body-" + title,
-			"tags":          tags,
-		}, nil)
-		if resp.Status < 200 || resp.Status >= 300 {
-			t.Fatalf("seed %q: status=%d body=%s", title, resp.Status, resp.Body)
-		}
-	}
-	for i := 0; i < 10; i++ {
-		seed(fmt.Sprintf("go-only-%d", i), []string{"go"})
-	}
-	for i := 0; i < 10; i++ {
-		seed(fmt.Sprintf("py-only-%d", i), []string{"py"})
-	}
-	for i := 0; i < 5; i++ {
-		seed(fmt.Sprintf("both-%d", i), []string{"go", "py"})
+	// 再建几篇用于列表分页 + tag 过滤
+	for i := 0; i < 3; i++ {
+		r := apiCall(t, http.MethodPost, "/v1/posts", map[string]any{
+			"title": fmt.Sprintf("post-%d", i),
+			"body":  "body",
+			"tags":  []string{"misc"},
+		}, author.Token)
+		assertStatus(t, r, 200)
 	}
 
-	cases := []struct {
-		name      string
-		query     url.Values
-		wantTotal int64
-		wantItems int // items in this page
-	}{
-		{
-			name:      "no params -> default size 20, total 25",
-			query:     url.Values{},
-			wantTotal: 25,
-			wantItems: 20,
-		},
-		{
-			name:      "page=2 with default size -> remaining 5",
-			query:     url.Values{"page": {"2"}},
-			wantTotal: 25,
-			wantItems: 5,
-		},
-		{
-			name:      "custom size=10",
-			query:     url.Values{"size": {"10"}},
-			wantTotal: 25,
-			wantItems: 10,
-		},
-		{
-			name:      "tag=go -> 15 (10 go-only + 5 both)",
-			query:     url.Values{"tag": {"go"}, "size": {"100"}},
-			wantTotal: 15,
-			wantItems: 15,
-		},
-		{
-			name:      "tag=py -> 15",
-			query:     url.Values{"tag": {"py"}, "size": {"100"}},
-			wantTotal: 15,
-			wantItems: 15,
-		},
-		{
-			name:      "tag=missing -> empty",
-			query:     url.Values{"tag": {"does-not-exist"}},
-			wantTotal: 0,
-			wantItems: 0,
-		},
-		{
-			name:      "size>100 clamped to 100",
-			query:     url.Values{"size": {"500"}},
-			wantTotal: 25,
-			wantItems: 25, // only 25 seeded, so still 25
-		},
-	}
+	t.Run("list page=1 size=2", func(t *testing.T) {
+		r := apiCall(t, http.MethodGet, "/v1/posts?page=1&page_size=2", nil, "")
+		assertStatus(t, r, 200)
+		var list struct {
+			Total int64 `json:"total"`
+			Items []any `json:"items"`
+		}
+		decode(t, r, &list)
+		if list.Total < 4 {
+			t.Fatalf("total=%d want>=4", list.Total)
+		}
+		if len(list.Items) != 2 {
+			t.Fatalf("items=%d want=2", len(list.Items))
+		}
+	})
 
-	for _, tc := range cases {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			resp := client.apiCall(http.MethodGet, "/v1/posts", nil, tc.query)
-			if resp.Status != http.StatusOK {
-				t.Fatalf("want 200, got %d body=%s", resp.Status, resp.Body)
-			}
-			var list postListDTO
-			if err := resp.decode(&list); err != nil {
-				t.Fatalf("decode: %v (%s)", err, resp.Body)
-			}
-			if list.Total != tc.wantTotal {
-				t.Errorf("total: got %d want %d", list.Total, tc.wantTotal)
-			}
-			if len(list.Items) != tc.wantItems {
-				t.Errorf("items: got %d want %d", len(list.Items), tc.wantItems)
-			}
-		})
-	}
+	t.Run("list filter by tag=golang", func(t *testing.T) {
+		r := apiCall(t, http.MethodGet, "/v1/posts?page=1&page_size=10&tag=golang", nil, "")
+		assertStatus(t, r, 200)
+		var list struct {
+			Total int64 `json:"total"`
+			Items []any `json:"items"`
+		}
+		decode(t, r, &list)
+		if list.Total != 1 {
+			t.Fatalf("total=%d want=1 (only updated post has tag golang)", list.Total)
+		}
+	})
+
+	// Like idempotency
+	t.Run("like idempotent", func(t *testing.T) {
+		for i := 0; i < 2; i++ {
+			r := apiCall(t, http.MethodPost, fmt.Sprintf("/v1/posts/%d/like", postID), nil, other.Token)
+			assertStatus(t, r, 200)
+		}
+		// 查 post like_count
+		r := apiCall(t, http.MethodGet, fmt.Sprintf("/v1/posts/%d", postID), nil, "")
+		assertStatus(t, r, 200)
+		var p struct {
+			LikeCount int64 `json:"like_count"`
+		}
+		decode(t, r, &p)
+		if p.LikeCount != 1 {
+			t.Fatalf("like_count=%d want=1 after 2 likes", p.LikeCount)
+		}
+	})
+
+	t.Run("unlike idempotent", func(t *testing.T) {
+		for i := 0; i < 2; i++ {
+			r := apiCall(t, http.MethodDelete, fmt.Sprintf("/v1/posts/%d/like", postID), nil, other.Token)
+			assertStatus(t, r, 200)
+		}
+		r := apiCall(t, http.MethodGet, fmt.Sprintf("/v1/posts/%d", postID), nil, "")
+		assertStatus(t, r, 200)
+		var p struct {
+			LikeCount int64 `json:"like_count"`
+		}
+		decode(t, r, &p)
+		if p.LikeCount != 0 {
+			t.Fatalf("like_count=%d want=0 after unlike", p.LikeCount)
+		}
+	})
+
+	// Delete by non-author -> 403
+	t.Run("delete by non-author forbidden", func(t *testing.T) {
+		r := apiCall(t, http.MethodDelete, fmt.Sprintf("/v1/posts/%d", postID), nil, other.Token)
+		assertStatus(t, r, 403)
+		assertReason(t, r, "POST_FORBIDDEN")
+	})
+
+	// Delete by author
+	t.Run("delete by author ok", func(t *testing.T) {
+		r := apiCall(t, http.MethodDelete, fmt.Sprintf("/v1/posts/%d", postID), nil, author.Token)
+		assertStatus(t, r, 200)
+	})
+
+	t.Run("get after delete -> 404", func(t *testing.T) {
+		r := apiCall(t, http.MethodGet, fmt.Sprintf("/v1/posts/%d", postID), nil, "")
+		assertStatus(t, r, 404)
+	})
 }

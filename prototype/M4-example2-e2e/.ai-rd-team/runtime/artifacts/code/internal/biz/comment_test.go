@@ -2,90 +2,108 @@ package biz
 
 import (
 	"context"
-	"strings"
 	"testing"
 
-	kerrors "github.com/go-kratos/kratos/v2/errors"
+	"github.com/go-kratos/kratos/v2/errors"
+	"github.com/go-kratos/kratos/v2/log"
 )
 
-func setupCommentUC(t *testing.T) (*CommentUsecase, *PostUsecase, int64) {
-	t.Helper()
-	ur := newFakeUserRepo()
-	pr := newFakePostRepo()
-	cr := newFakeCommentRepo()
-
-	postUC := NewPostUsecase(pr, ur, testLogger())
-	cuc := NewCommentUsecase(cr, pr, testLogger())
-	userUC := NewUserUsecase(ur, &stubTokenIssuer{}, testLogger())
-
-	u, err := userUC.Register(context.Background(), "a@b.com", "secret1", "a")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return cuc, postUC, u.ID
+func newTestCommentUsecase(cr CommentRepo, pr PostRepo) *CommentUsecase {
+	return NewCommentUsecase(cr, pr, log.DefaultLogger)
 }
 
-func TestCommentUsecase_Create_Success(t *testing.T) {
-	cuc, puc, authorID := setupCommentUC(t)
-	p, err := puc.Create(context.Background(), authorID, "t", "b", nil)
-	if err != nil {
-		t.Fatal(err)
+func TestComment_Create_PostNotFound(t *testing.T) {
+	pr := &mockPostRepo{
+		getByIDFn: func(ctx context.Context, id int64) (*Post, error) {
+			return nil, ErrPostNotFound
+		},
 	}
-	c, err := cuc.Create(context.Background(), p.ID, authorID, "  nice post  ")
-	if err != nil {
-		t.Fatal(err)
+	uc := newTestCommentUsecase(&mockCommentRepo{}, pr)
+	_, err := uc.Create(context.Background(), 100, 1, "nice")
+	if err == nil {
+		t.Fatal("expected POST_NOT_FOUND")
 	}
-	if c.Content != "nice post" {
-		t.Fatalf("content not trimmed: %q", c.Content)
-	}
-	if c.ID == 0 {
-		t.Fatalf("id not assigned")
+	if errors.FromError(err).Reason != "POST_NOT_FOUND" {
+		t.Fatalf("want POST_NOT_FOUND, got %q", errors.FromError(err).Reason)
 	}
 }
 
-func TestCommentUsecase_Create_Validation(t *testing.T) {
-	cuc, puc, authorID := setupCommentUC(t)
-	p, _ := puc.Create(context.Background(), authorID, "t", "b", nil)
-
-	_, err := cuc.Create(context.Background(), p.ID, authorID, "")
-	if err == nil || kerrors.Reason(err) != "VALIDATION_FAILED" {
-		t.Fatalf("expected VALIDATION_FAILED, got %v", err)
+func TestComment_Create_Success(t *testing.T) {
+	pr := &mockPostRepo{
+		getByIDFn: func(ctx context.Context, id int64) (*Post, error) {
+			return &Post{ID: id}, nil
+		},
 	}
-
-	_, err = cuc.Create(context.Background(), p.ID, authorID, strings.Repeat("x", 2001))
-	if err == nil || kerrors.Reason(err) != "VALIDATION_FAILED" {
-		t.Fatalf("expected VALIDATION_FAILED on too long, got %v", err)
+	var captured *Comment
+	cr := &mockCommentRepo{
+		createFn: func(ctx context.Context, c *Comment) (*Comment, error) {
+			c.ID = 55
+			captured = c
+			return c, nil
+		},
 	}
-}
-
-func TestCommentUsecase_Create_PostMissing(t *testing.T) {
-	cuc, _, authorID := setupCommentUC(t)
-	_, err := cuc.Create(context.Background(), 9999, authorID, "hi")
-	if err == nil || kerrors.Reason(err) != "POST_NOT_FOUND" {
-		t.Fatalf("expected POST_NOT_FOUND, got %v", err)
-	}
-}
-
-func TestCommentUsecase_ListByPost(t *testing.T) {
-	cuc, puc, authorID := setupCommentUC(t)
-	p, _ := puc.Create(context.Background(), authorID, "t", "b", nil)
-
-	for i := 0; i < 3; i++ {
-		if _, err := cuc.Create(context.Background(), p.ID, authorID, "c"); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	items, total, err := cuc.ListByPost(context.Background(), p.ID, 1, 10)
+	uc := newTestCommentUsecase(cr, pr)
+	c, err := uc.Create(context.Background(), 100, 1, "  nice post  ")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("unexpected: %v", err)
 	}
-	if total != 3 || len(items) != 3 {
-		t.Fatalf("total=%d items=%d", total, len(items))
+	if c.ID != 55 {
+		t.Fatalf("want ID=55, got %d", c.ID)
 	}
+	if captured.Body != "nice post" {
+		t.Fatalf("body should be trimmed, got %q", captured.Body)
+	}
+}
 
-	_, _, err = cuc.ListByPost(context.Background(), 9999, 1, 10)
-	if err == nil || kerrors.Reason(err) != "POST_NOT_FOUND" {
-		t.Fatalf("expected POST_NOT_FOUND, got %v", err)
+func TestComment_Create_EmptyBodyValidation(t *testing.T) {
+	pr := &mockPostRepo{
+		getByIDFn: func(ctx context.Context, id int64) (*Post, error) {
+			return &Post{ID: id}, nil
+		},
+	}
+	uc := newTestCommentUsecase(&mockCommentRepo{}, pr)
+	_, err := uc.Create(context.Background(), 100, 1, "   ")
+	if err == nil {
+		t.Fatal("expected VALIDATION_FAILED")
+	}
+	if errors.FromError(err).Reason != "VALIDATION_FAILED" {
+		t.Fatalf("want VALIDATION_FAILED, got %q", errors.FromError(err).Reason)
+	}
+}
+
+func TestComment_ListByPost_PostNotFound(t *testing.T) {
+	pr := &mockPostRepo{
+		getByIDFn: func(ctx context.Context, id int64) (*Post, error) {
+			return nil, ErrPostNotFound
+		},
+	}
+	uc := newTestCommentUsecase(&mockCommentRepo{}, pr)
+	_, err := uc.ListByPost(context.Background(), 999)
+	if err == nil {
+		t.Fatal("expected POST_NOT_FOUND")
+	}
+	if errors.FromError(err).Reason != "POST_NOT_FOUND" {
+		t.Fatalf("want POST_NOT_FOUND, got %q", errors.FromError(err).Reason)
+	}
+}
+
+func TestComment_ListByPost_Success(t *testing.T) {
+	pr := &mockPostRepo{
+		getByIDFn: func(ctx context.Context, id int64) (*Post, error) {
+			return &Post{ID: id}, nil
+		},
+	}
+	cr := &mockCommentRepo{
+		listByPostFn: func(ctx context.Context, postID int64) ([]*Comment, error) {
+			return []*Comment{{ID: 1, PostID: postID, Body: "a"}, {ID: 2, PostID: postID, Body: "b"}}, nil
+		},
+	}
+	uc := newTestCommentUsecase(cr, pr)
+	list, err := uc.ListByPost(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("want 2 comments, got %d", len(list))
 	}
 }

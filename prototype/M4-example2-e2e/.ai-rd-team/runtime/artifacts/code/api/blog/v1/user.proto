@@ -2,29 +2,32 @@ syntax = "proto3";
 
 package blog.v1;
 
+option go_package = "blog/api/blog/v1;v1";
+
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 
-option go_package = "blog/api/blog/v1;v1";
-
-service UserService {
-  rpc Register (RegisterRequest) returns (User) {
-    option (google.api.http) = { post: "/v1/users" body: "*" };
+service User {
+  // 注册
+  rpc Register(RegisterRequest) returns (UserReply) {
+    option (google.api.http) = {
+      post: "/v1/users"
+      body: "*"
+    };
   }
-  rpc Login (LoginRequest) returns (LoginReply) {
-    option (google.api.http) = { post: "/v1/auth/login" body: "*" };
+  // 登录
+  rpc Login(LoginRequest) returns (LoginReply) {
+    option (google.api.http) = {
+      post: "/v1/auth/login"
+      body: "*"
+    };
   }
-  rpc GetMe (GetMeRequest) returns (User) {
-    option (google.api.http) = { get: "/v1/users/me" };
+  // 当前用户
+  rpc GetMe(GetMeRequest) returns (UserReply) {
+    option (google.api.http) = {
+      get: "/v1/users/me"
+    };
   }
-}
-
-message User {
-  int64  id         = 1;
-  string email      = 2;
-  string nickname   = 3;
-  google.protobuf.Timestamp created_at = 4;
-  google.protobuf.Timestamp updated_at = 5;
 }
 
 message RegisterRequest {
@@ -39,8 +42,15 @@ message LoginRequest {
 }
 
 message LoginReply {
-  string token = 1;
-  User   user  = 2;
+  string    token = 1;
+  UserReply user  = 2;
 }
 
 message GetMeRequest {}
+
+message UserReply {
+  int64                      id         = 1;
+  string                     email      = 2;
+  string                     nickname   = 3;
+  google.protobuf.Timestamp  created_at = 4;
+}

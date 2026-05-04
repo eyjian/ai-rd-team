@@ -1,159 +1,48 @@
-// Package integration — real app factory wiring BlogAPI for end-to-end tests.
+//go:build integration_real
+// +build integration_real
+
+// 当 dev_2 完成 cmd/server/wire_gen.go 后，将本文件从 build tag 切换为默认编译：
+// 把文件顶部的 `//go:build integration_real` 删除即可。
 //
-// This file is produced by developer_2 to bridge the test harness stub
-// (app_stub.go) to the real production wiring. It lives in the tests/integration
-// package so it can reach both the stub types (AppConfig/AppRunner/AppFactory)
-// and the internal packages.
+// 切换前：测试包能编译但 AppFactory == nil -> 测试会 Skip。
+// 切换后：AppFactory 注入到真实 wireApp，testcontainers 拉 PG 真跑测试。
 package integration
 
 import (
 	"context"
-	"time"
+	"fmt"
 
-	"blog/internal/biz"
-	"blog/internal/conf"
-	"blog/internal/data"
-	"blog/internal/pkg/auth"
-	"blog/internal/server"
-	"blog/internal/service"
-
-	khttp "github.com/go-kratos/kratos/v2/transport/http"
-
+	"github.com/go-kratos/kratos/v2"
 	"github.com/go-kratos/kratos/v2/log"
+
+	// TODO(tester): 下面两个 import 在 dev_2 完成后放开。
+	// 为避免 dev_2 未完成时编译失败，此文件通过 build tag `integration_real` 禁用。
+	// cmdserver "blog/cmd/server"
+	// "blog/internal/conf"
 )
 
 func init() {
-	AppFactory = realAppFactory
+	AppFactory = buildRealApp
 }
 
-// realAppFactory constructs a BlogAPI instance suitable for integration tests.
-// It builds each layer manually (equivalent to cmd/server/wire.go) because
-// wireApp lives in the main package and isn't importable here.
-func realAppFactory(cfg AppConfig, logger log.Logger) (AppRunner, func(), error) {
-	bs := translateConfig(cfg)
-
-	d, cleanup, err := data.NewData(bs.GetData(), logger)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	userRepo := data.NewUserRepo(d, logger)
-	postRepo := data.NewPostRepo(d, logger)
-	commentRepo := data.NewCommentRepo(d, logger)
-
-	jwt := auth.NewJWTIssuer(bs.GetAuth())
-
-	userUC := biz.NewUserUsecase(userRepo, jwt, logger)
-	postUC := biz.NewPostUsecase(postRepo, userRepo, logger)
-	commentUC := biz.NewCommentUsecase(commentRepo, postRepo, logger)
-
-	userSvc := service.NewUserService(userUC)
-	postSvc := service.NewPostService(postUC)
-	commentSvc := service.NewCommentService(commentUC)
-
-	httpSrv := server.NewHTTPServer(bs.GetServer(), userSvc, postSvc, commentSvc, jwt, logger)
-	grpcSrv := server.NewGRPCServer(bs.GetServer(), logger)
-
-	return &kratosRunner{http: httpSrv, grpc: grpcSrv}, cleanup, nil
-}
-
-// compile-time assertion kratosRunner implements AppRunner.
-var _ AppRunner = (*kratosRunner)(nil)
-
-func translateConfig(cfg AppConfig) *conf.Bootstrap {
-	httpAddr := cfg.HTTPAddr
-	if httpAddr == "" {
-		httpAddr = "127.0.0.1:0"
-	}
-	grpcAddr := cfg.GRPCAddr
-	if grpcAddr == "" {
-		grpcAddr = "127.0.0.1:0"
-	}
-	timeout := cfg.ServerTimeout
-	if timeout <= 0 {
-		timeout = 10 * time.Second
-	}
-	ttl := cfg.AccessTTL
-	if ttl <= 0 {
-		ttl = 168 * time.Hour
-	}
-	return &conf.Bootstrap{
-		Server: &conf.Server{
-			Http: &conf.Server_HTTP{Addr: httpAddr, Timeout: timeout},
-			Grpc: &conf.Server_GRPC{Addr: grpcAddr, Timeout: timeout},
-		},
-		Data: &conf.Data{
-			Database: &conf.Data_Database{Driver: "postgres", Source: cfg.PostgresDSN},
-			LogLevel: cfg.LogLevel,
-		},
-		Auth: &conf.Auth{
-			JwtSecret: cfg.JWTSecret,
-			AccessTtl: ttl,
-		},
-	}
-}
-
-// kratosRunner adapts *khttp.Server (+ optional gRPC) into AppRunner.
-//
-// The gRPC server is started alongside HTTP for parity with production,
-// but the integration tests only call HTTPAddr() and hit HTTP endpoints.
-type kratosRunner struct {
-	http *khttp.Server
-	grpc kratosGRPCServer // interface for Start/Stop, allows nil
-	addr string
-}
-
-// kratosGRPCServer is the minimal surface needed from *kgrpc.Server.
-type kratosGRPCServer interface {
-	Start(context.Context) error
-	Stop(context.Context) error
-}
-
-// HTTPAddr returns the actual bound HTTP address. It triggers listener setup
-// eagerly via Endpoint() so that callers using port "0" get a real port.
-func (r *kratosRunner) HTTPAddr() string {
-	if r.addr != "" {
-		return r.addr
-	}
-	ep, err := r.http.Endpoint()
-	if err != nil || ep == nil {
-		return ""
-	}
-	r.addr = ep.Host
-	return r.addr
-}
-
-// Start launches both transports. It blocks until the server stops or errors.
-// The integration suite invokes this in a goroutine and polls HTTPAddr() to
-// confirm readiness.
-func (r *kratosRunner) Start(ctx context.Context) error {
-	// Trigger HTTP listener to bind immediately so HTTPAddr() is stable.
-	if _, err := r.http.Endpoint(); err != nil {
-		return err
-	}
-	errCh := make(chan error, 2)
-	go func() { errCh <- r.http.Start(ctx) }()
-	if r.grpc != nil {
-		go func() { errCh <- r.grpc.Start(ctx) }()
-	}
-	select {
-	case err := <-errCh:
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-// Stop gracefully shuts down both transports.
-func (r *kratosRunner) Stop(ctx context.Context) error {
-	var firstErr error
-	if err := r.http.Stop(ctx); err != nil {
-		firstErr = err
-	}
-	if r.grpc != nil {
-		if err := r.grpc.Stop(ctx); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-	return firstErr
+// buildRealApp 使用 dev_2 暴露的 wireApp 构造真实 kratos.App。
+// 约定：dev_2 的 cmd/server 包对外导出 WireApp（或等价工厂函数）。
+func buildRealApp(ctx context.Context, dsn, jwtSecret string) (*kratos.App, string, func(), error) {
+	// 预留实现点，切换 build tag 后按下述骨架填充：
+	//
+	// port, err := pickFreePort()
+	// if err != nil { return nil, "", nil, err }
+	// httpAddr := fmt.Sprintf("127.0.0.1:%d", port)
+	//
+	// bc := &conf.Bootstrap{
+	//     Server: &conf.Server{Http: &conf.Server_HTTP{Addr: httpAddr, Timeout: 10 * time.Second}},
+	//     Data:   &conf.Data{Database: &conf.Data_Database{Driver: "postgres", Source: dsn}},
+	//     Auth:   &conf.Auth{JwtSecret: jwtSecret, Expire: 24 * time.Hour},
+	// }
+	// app, cleanup, err := cmdserver.WireApp(bc.Server, bc.Data, bc.Auth, log.DefaultLogger)
+	// if err != nil { return nil, "", nil, err }
+	// go app.Run()
+	// return app, httpAddr, cleanup, nil
+	_ = log.DefaultLogger
+	return nil, "", nil, fmt.Errorf("buildRealApp not yet wired; fill in after dev_2 finishes wire_gen.go")
 }

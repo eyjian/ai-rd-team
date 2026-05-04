@@ -1,24 +1,23 @@
 name: architect
 role: architect
-status: "done"
-current_task: "架构设计、契约、API 骨架交付完成"
-last_updated: "2026-05-04T15:37:50+08:00"
-progress: "100%"
+status: done
+current_task: "BlogAPI 架构设计与 proto/pb.go 生成"
+last_updated: "2026-05-04T16:53:00+08:00"
+progress: 100
 produced_files:
-  - artifacts/design/spec-design.md
-  - artifacts/design/data-interfaces.yaml
-  - artifacts/design/biz-contracts.md
-  - artifacts/design/schema.sql
-  - artifacts/design/go.mod.template
-  - artifacts/code/go.mod
-  - artifacts/code/api/blog/v1/common.proto
-  - artifacts/code/api/blog/v1/user.proto
-  - artifacts/code/api/blog/v1/post.proto
-  - artifacts/code/api/blog/v1/comment.proto
-  - artifacts/code/api/blog/v1/common.pb.go
-  - artifacts/code/api/blog/v1/user.pb.go
-  - artifacts/code/api/blog/v1/post.pb.go
-  - artifacts/code/api/blog/v1/comment.pb.go
-  - artifacts/code/api/blog/v1/errors.go
-  - artifacts/reports/report-architect.md
+  - .ai-rd-team/runtime/artifacts/design/spec-design.md
+  - .ai-rd-team/runtime/artifacts/design/biz-contracts.md
+  - .ai-rd-team/runtime/artifacts/design/schema.sql
+  - .ai-rd-team/runtime/artifacts/design/report-architect.md
+  - .ai-rd-team/runtime/artifacts/code/go.mod
+  - .ai-rd-team/runtime/artifacts/code/Makefile
+  - .ai-rd-team/runtime/artifacts/code/api/blog/v1/common.proto
+  - .ai-rd-team/runtime/artifacts/code/api/blog/v1/common.pb.go
+  - .ai-rd-team/runtime/artifacts/code/api/blog/v1/user.proto
+  - .ai-rd-team/runtime/artifacts/code/api/blog/v1/user.pb.go
+  - .ai-rd-team/runtime/artifacts/code/api/blog/v1/post.proto
+  - .ai-rd-team/runtime/artifacts/code/api/blog/v1/post.pb.go
+  - .ai-rd-team/runtime/artifacts/code/api/blog/v1/comment.proto
+  - .ai-rd-team/runtime/artifacts/code/api/blog/v1/comment.pb.go
+  - .ai-rd-team/runtime/artifacts/code/api/blog/v1/errors.go
 blocking_issues: []

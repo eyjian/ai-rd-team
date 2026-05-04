@@ -1,8 +1,31 @@
 name: tester
 role: tester
 status: terminated
-current_task: ''
-progress: ''
-last_updated: '2026-05-04T07:38:53.001+00:00'
-produced_files: []
-blocking_issues: []
+current_task: tests/integration skeleton complete; waiting for dev_2 wireApp
+progress: '- 已写骨架：app_stub.go / app_factory_real.go (build tag gated) / main_test.go
+  / helpers_test.go
+
+  - 已写业务测试：user_test.go / post_test.go / comment_test.go / e2e_flow_test.go
+
+  - go vet ./tests/... 通过；go test -run ''NoMatch'' ./tests/... 通过（0 用例，编译完好）
+
+  - testcontainers-go v0.42.0 已自动加入 go.mod
+
+  - AppFactory == nil 时，业务测试会 t.Skip，不影响 go build
+
+  '
+last_updated: '2026-05-04T09:03:12.139+00:00'
+produced_files:
+- tests/integration/app_stub.go
+- tests/integration/app_factory_real.go
+- tests/integration/main_test.go
+- tests/integration/helpers_test.go
+- tests/integration/user_test.go
+- tests/integration/post_test.go
+- tests/integration/comment_test.go
+- tests/integration/e2e_flow_test.go
+blocking_issues:
+- internal/biz/user.go 依赖 conf.Auth.GetJwtSecret()/GetExpire() 方法，目前 conf.Auth 无这些字段/方法；dev_1
+  与 dev_2 需对齐 conf.Auth 定义
+- 等 dev_2 完成 cmd/server/wire_gen.go 与 WireApp 工厂函数后，写 app_factory_real.go 真实实现并移除
+  build tag

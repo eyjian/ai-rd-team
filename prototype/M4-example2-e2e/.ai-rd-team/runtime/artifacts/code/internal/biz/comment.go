@@ -6,36 +6,34 @@ import (
 	"strings"
 	"time"
 
-	kerrors "github.com/go-kratos/kratos/v2/errors"
+	v1 "blog/api/blog/v1"
+
 	"github.com/go-kratos/kratos/v2/log"
 )
 
-// Comment 评论领域模型。
+// Comment 为评论 DO。
 type Comment struct {
 	ID        int64
 	PostID    int64
 	AuthorID  int64
-	Content   string
+	Body      string
 	CreatedAt time.Time
 }
-
-// ErrCommentNotFound data 层内部哨兵值。
-var ErrCommentNotFound = errors.New("comment not found")
 
 // CommentRepo 由 data 层实现。
 type CommentRepo interface {
 	Create(ctx context.Context, c *Comment) (*Comment, error)
-	ListByPost(ctx context.Context, postID int64, page, size int32) ([]*Comment, int64, error)
+	ListByPost(ctx context.Context, postID int64) ([]*Comment, error)
 }
 
-// CommentUsecase 评论用例。
+// CommentUsecase 封装评论相关用例。
 type CommentUsecase struct {
 	cr  CommentRepo
 	pr  PostRepo
 	log *log.Helper
 }
 
-// NewCommentUsecase 构造函数。
+// NewCommentUsecase 构造 CommentUsecase。
 func NewCommentUsecase(cr CommentRepo, pr PostRepo, logger log.Logger) *CommentUsecase {
 	return &CommentUsecase{
 		cr:  cr,
@@ -44,43 +42,46 @@ func NewCommentUsecase(cr CommentRepo, pr PostRepo, logger log.Logger) *CommentU
 	}
 }
 
-// Create 发表评论：校验内容 + 校验文章存在。
-func (uc *CommentUsecase) Create(ctx context.Context, postID, authorID int64, content string) (*Comment, error) {
-	content = strings.TrimSpace(content)
-	if content == "" || len(content) > 2000 {
-		return nil, kerrors.BadRequest("VALIDATION_FAILED", "content length 1..2000")
+// Create 在某篇文章下发表评论。
+func (uc *CommentUsecase) Create(ctx context.Context, postID, authorID int64, body string) (*Comment, error) {
+	if authorID <= 0 {
+		return nil, v1.ErrorUserUnauthenticated("author required")
 	}
+	if postID <= 0 {
+		return nil, v1.ErrorValidationFailed("post id must be positive")
+	}
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return nil, v1.ErrorValidationFailed("body required")
+	}
+
+	// 校验文章存在
 	if _, err := uc.pr.GetByID(ctx, postID); err != nil {
-		if errors.Is(err, ErrPostNotFound) || kerrors.IsNotFound(err) {
-			return nil, kerrors.NotFound("POST_NOT_FOUND", "post not found")
+		if errors.Is(err, ErrPostNotFound) {
+			return nil, v1.ErrorPostNotFound("post %d not found", postID)
 		}
 		return nil, err
 	}
+
 	c := &Comment{
 		PostID:   postID,
 		AuthorID: authorID,
-		Content:  content,
+		Body:     body,
 	}
 	return uc.cr.Create(ctx, c)
 }
 
-// ListByPost 按文章分页列出评论。
-func (uc *CommentUsecase) ListByPost(ctx context.Context, postID int64, page, size int32) ([]*Comment, int64, error) {
-	if page < 1 {
-		page = 1
+// ListByPost 查询文章下的评论（按时间升序）。
+func (uc *CommentUsecase) ListByPost(ctx context.Context, postID int64) ([]*Comment, error) {
+	if postID <= 0 {
+		return nil, v1.ErrorValidationFailed("post id must be positive")
 	}
-	if size < 1 {
-		size = 20
-	}
-	if size > 100 {
-		size = 100
-	}
-	// 先确认文章存在，语义更清晰。
+	// 校验文章存在
 	if _, err := uc.pr.GetByID(ctx, postID); err != nil {
-		if errors.Is(err, ErrPostNotFound) || kerrors.IsNotFound(err) {
-			return nil, 0, kerrors.NotFound("POST_NOT_FOUND", "post not found")
+		if errors.Is(err, ErrPostNotFound) {
+			return nil, v1.ErrorPostNotFound("post %d not found", postID)
 		}
-		return nil, 0, err
+		return nil, err
 	}
-	return uc.cr.ListByPost(ctx, postID, page, size)
+	return uc.cr.ListByPost(ctx, postID)
 }

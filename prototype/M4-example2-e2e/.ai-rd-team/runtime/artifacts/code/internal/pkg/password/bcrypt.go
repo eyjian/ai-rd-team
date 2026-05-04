@@ -1,31 +1,22 @@
-// Package password 封装密码散列 / 校验，内部使用 bcrypt。
-//
-// 测试环境可调用 SetTestCost(4) 以加速单测。生产默认 bcrypt.DefaultCost。
+// Package password 封装密码哈希与校验，统一使用 bcrypt。
 package password
 
 import "golang.org/x/crypto/bcrypt"
 
-// 当前 bcrypt 的 cost，默认跟随 bcrypt.DefaultCost。
-var cost = bcrypt.DefaultCost
+// DefaultCost 默认 bcrypt cost。
+const DefaultCost = 10
 
-// SetTestCost 调整 bcrypt 的 cost，仅供测试使用。
-func SetTestCost(c int) {
-	if c < bcrypt.MinCost || c > bcrypt.MaxCost {
-		return
-	}
-	cost = c
-}
-
-// Hash 计算密码散列。
+// Hash 生成 bcrypt 哈希。
 func Hash(plain string) (string, error) {
-	b, err := bcrypt.GenerateFromPassword([]byte(plain), cost)
+	b, err := bcrypt.GenerateFromPassword([]byte(plain), DefaultCost)
 	if err != nil {
 		return "", err
 	}
 	return string(b), nil
 }
 
-// Verify 校验密码与散列是否匹配。
+// Verify 校验明文密码与 bcrypt 哈希是否匹配。
+// 返回 true 表示匹配；任何错误都视为不匹配（不泄漏原因）。
 func Verify(hash, plain string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(plain)) == nil
 }

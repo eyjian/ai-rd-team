@@ -2,5 +2,5 @@ package server
 
 import "github.com/google/wire"
 
-// ProviderSet is used by top-level wire to construct http/grpc servers.
+// ProviderSet server 层 wire set
 var ProviderSet = wire.NewSet(NewHTTPServer, NewGRPCServer)
