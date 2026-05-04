@@ -1,15 +1,29 @@
-"""ai-rd-team CLI 入口（骨架版）。
+"""ai-rd-team CLI 入口。
 
-完整实现见 M1 任务 T1.13，对应设计文档：
-- 10-config-schema.md §10（CLI 命令总览）
+对应设计文档：openspec/specs/design/10-config-schema.md §10（CLI 命令总览）
+
+M1 实现：
+- version: 显示版本
+- init: 触发首次引导
+- run: 启动团队
+- config show / advanced / validate: 基础配置命令
 """
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
+
 import typer
 from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
 from ai_rd_team import __version__
+from ai_rd_team.config.inference import ConfigInference
+from ai_rd_team.config.loader import ConfigLoader, ConfigValidationError
+from ai_rd_team.config.onboarding import ConfigOnboarding
+from ai_rd_team.engine.manager import TeamEnvironmentManager
 
 app = typer.Typer(
     name="ai-rd-team",
@@ -18,6 +32,11 @@ app = typer.Typer(
 )
 
 console = Console()
+
+
+# ============================================================
+# 基础命令
+# ============================================================
 
 
 @app.command()
@@ -33,24 +52,132 @@ def init(
         "--interactive/--yes",
         help="是否交互式引导（--yes 使用推荐默认）",
     ),
+    workspace: Path | None = typer.Option(
+        None,
+        "--workspace",
+        "-w",
+        help="工作区目录（默认当前目录）",
+    ),
 ) -> None:
-    """手动触发首次引导（M1 实现）。"""
-    console.print("[yellow]init 命令尚未实现，将在 M1 阶段完成[/yellow]")
-    raise typer.Exit(code=1)
+    """手动触发首次启动引导，生成 config.yaml。"""
+    ws = workspace or Path.cwd()
+    inf = ConfigInference()
+    inferred = inf.infer(ws)
+
+    onboarding = ConfigOnboarding()
+    basic = onboarding.run(
+        workspace=ws,
+        interactive=interactive,
+        inferred=inferred,
+    )
+
+    config_path = ws / ".ai-rd-team" / "config.yaml"
+    console.print(
+        Panel(
+            f"✅ 已生成配置：[bold]{config_path}[/bold]\n"
+            f"   档位：{basic.run_mode}\n"
+            f"   预算：{basic.budget.per_run} RP/次, {basic.budget.per_day} RP/天\n"
+            f"   技术栈：{_format_tech_stack(basic.tech_stack)}",
+            title="init 完成",
+            border_style="green",
+        )
+    )
 
 
 @app.command()
 def run(
     requirement: str = typer.Argument(..., help="需求描述"),
-    mode: str | None = typer.Option(None, "--mode", help="运行档位: lite/standard/full"),
-    no_onboarding: bool = typer.Option(False, help="跳过首次引导"),
+    mode: str | None = typer.Option(
+        None,
+        "--mode",
+        help="运行档位: lite / standard / full（覆盖 config 中的 run_mode）",
+    ),
+    no_onboarding: bool = typer.Option(
+        False,
+        "--no-onboarding",
+        help="跳过首次引导（即使 config.yaml 缺失也用默认值）",
+    ),
+    workspace: Path | None = typer.Option(
+        None,
+        "--workspace",
+        "-w",
+        help="工作区目录（默认当前目录）",
+    ),
+    verbose: bool = typer.Option(False, "-v", "--verbose", help="详细日志"),
 ) -> None:
-    """启动团队执行需求（M1 实现）。"""
-    console.print("[yellow]run 命令尚未实现，将在 M1 阶段完成[/yellow]")
-    console.print(f"  requirement: {requirement}")
-    console.print(f"  mode: {mode or 'auto'}")
-    raise typer.Exit(code=1)
+    """启动团队执行需求。"""
+    if verbose:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s %(name)s [%(levelname)s] %(message)s",
+        )
 
+    ws = workspace or Path.cwd()
+
+    # 档位合法性检查
+    if mode is not None and mode not in ("lite", "standard", "full"):
+        console.print(f"[red]无效的档位 {mode!r}，必须是 lite/standard/full[/red]")
+        raise typer.Exit(code=2)
+
+    console.print(
+        Panel(
+            f"[bold]需求：[/bold]{requirement}\n"
+            f"[bold]工作区：[/bold]{ws}\n"
+            f"[bold]档位：[/bold]{mode or '（按 config 决定）'}",
+            title="ai-rd-team run",
+            border_style="blue",
+        )
+    )
+
+    engine = TeamEnvironmentManager(workspace=ws)
+    try:
+        engine.initialize(
+            preset=mode,  # type: ignore[arg-type]
+            allow_onboarding=not no_onboarding,
+            interactive=True,
+        )
+    except ConfigValidationError as e:
+        console.print(f"[red]配置校验失败：{e}[/red]")
+        raise typer.Exit(code=1) from e
+    except Exception as e:
+        console.print(f"[red]初始化失败：{e}[/red]")
+        if verbose:
+            raise
+        raise typer.Exit(code=1) from e
+
+    # 启动运行
+    try:
+        ctx = engine.start_run(requirement=requirement)
+    except Exception as e:
+        console.print(f"[red]启动运行失败：{e}[/red]")
+        if verbose:
+            raise
+        raise typer.Exit(code=1) from e
+
+    # 展示成员列表
+    table = Table(title=f"团队成员（run_id={ctx.run_id}）")
+    table.add_column("实例名", style="cyan")
+    table.add_column("角色", style="magenta")
+    table.add_column("中文名")
+    for member in ctx.members.values():
+        table.add_row(member.member_id, member.role, member.display_name)
+    console.print(table)
+
+    console.print(
+        Panel(
+            f"✅ 团队已启动，开始自主工作。\n\n"
+            f"观察产出：[bold]{ws / '.ai-rd-team' / 'runtime' / 'artifacts'}[/bold]\n"
+            f"观察状态：[bold]{ws / '.ai-rd-team' / 'runtime' / 'state'}[/bold]\n\n"
+            f"（M1 版本：运行中不阻塞主进程；M2+ 会加入 Web 面板）",
+            title="运行中",
+            border_style="green",
+        )
+    )
+
+
+# ============================================================
+# config 子命令
+# ============================================================
 
 config_app = typer.Typer(help="配置管理")
 app.add_typer(config_app, name="config")
@@ -58,27 +185,166 @@ app.add_typer(config_app, name="config")
 
 @config_app.command("show")
 def config_show(
-    layer: str = typer.Option("effective", help="basic/advanced/effective"),
-    source: str | None = typer.Option(None, help="查询某字段的来源"),
+    layer: str = typer.Option(
+        "effective",
+        help="basic / advanced / effective",
+    ),
+    workspace: Path | None = typer.Option(
+        None,
+        "--workspace",
+        "-w",
+    ),
 ) -> None:
-    """查看配置（M1 实现）。"""
-    console.print(f"[yellow]config show 尚未实现（layer={layer}）[/yellow]")
-    raise typer.Exit(code=1)
+    """查看配置。"""
+    ws = workspace or Path.cwd()
+    loader = ConfigLoader(workspace_dir=ws / ".ai-rd-team")
+
+    if layer == "basic":
+        basic = loader.load_basic()
+        if basic is None:
+            console.print(f"[yellow]Basic 配置不存在（{ws / '.ai-rd-team/config.yaml'}）[/yellow]")
+            raise typer.Exit(code=1)
+        console.print(
+            f"[bold]run_mode:[/bold] {basic.run_mode}\n"
+            f"[bold]tech_stack:[/bold] {_format_tech_stack(basic.tech_stack)}\n"
+            f"[bold]budget:[/bold] {basic.budget.per_run} RP/次, "
+            f"{basic.budget.per_day} RP/天\n"
+            f"[bold]description:[/bold] {basic.project.description}"
+        )
+    elif layer == "advanced":
+        adv = loader.load_advanced()
+        if adv is None:
+            console.print("[yellow]Advanced 配置不存在[/yellow]")
+            raise typer.Exit(code=1)
+        import yaml
+
+        console.print(yaml.safe_dump(adv, allow_unicode=True, sort_keys=False))
+    else:
+        try:
+            config = loader.load(allow_onboarding=False, interactive=False)
+        except ConfigValidationError as e:
+            console.print(f"[red]配置加载失败：{e}[/red]")
+            raise typer.Exit(code=1) from e
+
+        table = Table(title="EffectiveConfig 摘要")
+        table.add_column("字段", style="cyan")
+        table.add_column("值")
+        table.add_row("config_version", config.config_version)
+        table.add_row("project.name", config.project.name)
+        table.add_row("project.workspace", str(config.project.workspace))
+        table.add_row("active_mode", config.active_mode)
+        table.add_row(
+            "active_budget",
+            f"{config.active_budget.max_resource_points} RP",
+        )
+        table.add_row(
+            "billing_mode",
+            config.cost_control.billing_mode,
+        )
+        table.add_row(
+            "display_currency",
+            config.cost_control.display_currency,
+        )
+        console.print(table)
 
 
 @config_app.command("advanced")
-def config_advanced() -> None:
-    """生成 config.advanced.yaml（M1 实现）。"""
-    console.print("[yellow]config advanced 尚未实现[/yellow]")
-    raise typer.Exit(code=1)
+def config_advanced(
+    workspace: Path | None = typer.Option(None, "--workspace", "-w"),
+) -> None:
+    """导出当前 EffectiveConfig 为 config.advanced.yaml。"""
+    ws = workspace or Path.cwd()
+    loader = ConfigLoader(workspace_dir=ws / ".ai-rd-team")
+
+    try:
+        config = loader.load(allow_onboarding=False, interactive=False)
+    except ConfigValidationError as e:
+        console.print(f"[red]配置加载失败：{e}[/red]")
+        raise typer.Exit(code=1) from e
+
+    import yaml
+
+    # M1 最小版：仅导出关键字段
+    dumped = {
+        "config_version": config.config_version,
+        "project": {
+            "description": config.project.description,
+        },
+        "cost_control": {
+            "billing_mode": config.cost_control.billing_mode,
+            "default_mode": config.cost_control.default_mode,
+            "remembered_mode": config.cost_control.remembered_mode,
+            "budget_lite": _budget_to_dict(config.cost_control.budget_lite),
+            "budget_standard": _budget_to_dict(config.cost_control.budget_standard),
+            "budget_full": _budget_to_dict(config.cost_control.budget_full),
+        },
+    }
+
+    target = ws / ".ai-rd-team" / "config.advanced.yaml"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        "# ai-rd-team 高级配置（由 `ai-rd-team config advanced` 生成）\n"
+        "# 编辑后下次启动生效；可删除不想改的字段回退到 Basic/default\n\n"
+        + yaml.safe_dump(dumped, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+    console.print(f"✅ 已生成：[bold]{target}[/bold]")
 
 
 @config_app.command("validate")
-def config_validate() -> None:
-    """校验配置文件（M1 实现）。"""
-    console.print("[yellow]config validate 尚未实现[/yellow]")
-    raise typer.Exit(code=1)
+def config_validate(
+    workspace: Path | None = typer.Option(None, "--workspace", "-w"),
+) -> None:
+    """校验 config.yaml 和 config.advanced.yaml。"""
+    ws = workspace or Path.cwd()
+    loader = ConfigLoader(workspace_dir=ws / ".ai-rd-team")
+
+    errors: list[str] = []
+
+    basic_path = ws / ".ai-rd-team" / "config.yaml"
+    if basic_path.is_file():
+        import yaml
+
+        try:
+            raw = yaml.safe_load(basic_path.read_text(encoding="utf-8")) or {}
+            errors.extend(loader.validate(raw, layer="basic"))
+        except yaml.YAMLError as e:
+            errors.append(f"basic: YAML parse error: {e}")
+
+    if errors:
+        console.print("[red]校验失败：[/red]")
+        for e in errors:
+            console.print(f"  - {e}")
+        raise typer.Exit(code=1)
+
+    console.print("✅ 配置校验通过")
 
 
-if __name__ == "__main__":
+# ============================================================
+# 辅助函数
+# ============================================================
+
+
+def _format_tech_stack(ts: object) -> str:
+    """把 BasicTechStack 格式化为紧凑字符串。"""
+    parts: list[str] = []
+    for attr in ("backend", "frontend", "mobile"):
+        val = getattr(ts, attr, None)
+        if val:
+            parts.append(f"{attr}={val}")
+    return ", ".join(parts) if parts else "auto（架构师自决）"
+
+
+def _budget_to_dict(budget: object) -> dict[str, int]:
+    return {
+        "max_members": getattr(budget, "max_members", 0),
+        "max_messages": getattr(budget, "max_messages", 0),
+        "max_broadcasts": getattr(budget, "max_broadcasts", 0),
+        "max_runtime_minutes": getattr(budget, "max_runtime_minutes", 0),
+        "max_total_iterations": getattr(budget, "max_total_iterations", 0),
+        "max_resource_points": getattr(budget, "max_resource_points", 0),
+    }
+
+
+if __name__ == "__main__":  # pragma: no cover
     app()
