@@ -81,12 +81,16 @@ def main() -> int:
     for name, m in ctx.members.items():
         logger.info("  - %s (%s)", name, m.role)
 
-    # Standard 档任务较大，等 3 分钟
-    wait_seconds = 180
-    logger.info("stage 4: 等 %ds（Standard 档，多成员协作）", wait_seconds)
+    # Standard 档 Go+Kratos 项目需要充足时间：等 10 分钟
+    wait_seconds = 600
+    logger.info(
+        "stage 4: 等 %ds = %d 分钟（Standard 档，多成员协作 Go+Kratos）",
+        wait_seconds,
+        wait_seconds // 60,
+    )
     for i in range(wait_seconds):
         time.sleep(1)
-        if i % 20 == 19:
+        if i % 30 == 29:
             snap = engine.cost_snapshot()
             res = engine.check_budget()
             logger.info(

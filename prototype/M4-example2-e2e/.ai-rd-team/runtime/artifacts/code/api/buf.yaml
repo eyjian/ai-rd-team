@@ -1,5 +1,0 @@
-version: v1
-name: buf.build/blog/api
-deps:
-  - buf.build/googleapis/googleapis
-  - buf.build/envoyproxy/protoc-gen-validate

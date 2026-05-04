@@ -209,4 +209,8 @@ __marimo__/
 # CodeBuddy
 .codebuddy
 .claude
+
+# E2E prototype 运行临时产物（pid / 临时 log）
+prototype/**/driver.pid
+prototype/**/driver.stdout.log
 .trae

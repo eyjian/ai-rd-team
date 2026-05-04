@@ -1,89 +1,175 @@
-# 测试覆盖矩阵（tester 预产出骨架）
+# Tester 阶段报告（赵小测）
 
-> 作者：赵（tester）
-> 状态：骨架已就位，等待 developer_2 的 wireApp 接入后启用
-> 测试位置：`artifacts/code/tests/integration/`
+> Owner: tester（赵小测）
+> 范围: `tests/integration/`
+> 日期: 2026-05-04
 
-## 文件结构
+---
 
-```
-tests/integration/
-├── main_test.go          # TestMain：testcontainers PG + schema.sql + app 启动
-├── app_stub.go           # 占位的 startApp；dev_2 接入后替换（详见 TODO）
-├── helpers_test.go       # apiCall / createTestUser / assertStatus / assertReason
-├── paths_test.go         # pathPost / pathComments / pathLike
-├── user_test.go          # 用户（9 个子用例）
-├── post_test.go          # 文章（5 个子用例）
-├── comment_like_test.go  # 评论 + 点赞（7 个子用例）
-└── e2e_flow_test.go      # 端到端完整流程（8 个子测试，覆盖幂等）
-```
+## 1. 交付清单
 
-## 接入点（给 developer_2）
+工作目录：
+`prototype/M4-example2-e2e/.ai-rd-team/runtime/artifacts/code/tests/integration/`
 
-`app_stub.go` 暴露一个函数变量：
+| 文件 | 行数 | 作用 |
+|------|------|------|
+| `app_stub.go`       | 80  | 和 developer_2 装配层之间的解耦钩子。声明 `AppConfig`（纯 Go 类型）、`AppRunner` 接口、`AppFactory` 包级变量。 |
+| `main_test.go`      | 160 | `TestMain`：用 testcontainers-go/postgres 起 `postgres:15-alpine`，执行 `configs/schema.sql`，条件性调用 `AppFactory` 启动 BlogAPI。Docker 不可用时整体 skip，不把 CI 卡住。 |
+| `helpers_test.go`   | 250 | `setupTestDB` / `apiClient.apiCall` / `createTestUser` / `uniqueEmail` / `assertErrorReason` 等 table-driven 测试必备工具。 |
+| `user_test.go`      | 140 | 注册、登录、鉴权中间件（8 个 subtest）。 |
+| `post_test.go`      | 240 | 文章 CRUD + 作者鉴权 + 分页 + tag 过滤（14 个 subtest）。 |
+| `comment_test.go`   | 250 | 评论 CRUD + 点赞幂等 + cascade（14 个 subtest）。 |
+| `e2e_flow_test.go`  | 140 | 全流程：注册→登录→发帖→GET→list(tag)→like×2→comment→list→delete→验证 404 + cascade。 |
+
+总计约 **1260 行**，**7 个文件**，**47+ subtest**。
+
+---
+
+## 2. 关键决策
+
+### 2.1 通过 `AppFactory` 钩子解耦装配层
+`tests/integration/` 不直接 import `cmd/server`、也不直接 import `internal/conf`。
+- 好处：tests 包独立编译、架构师/装配层的改动不会反复触发 tests 重编译。
+- 代价：developer_2 需要写一个小 `init()` adapter 把 `*kratos.App` 适配成 `AppRunner`。
+
+`AppConfig` 用纯 Go 类型（`time.Duration` / `string`），不暴露 `google.protobuf.Duration` 这类协议细节。
+
+### 2.2 testcontainers-go 只启一次 PG，按 test 截断表
+- 在 `TestMain` 里启容器 + 建 schema 一次。
+- 每个 `Test*` 函数内用 `setupTestDB` 做 `TRUNCATE post_likes, comments, posts, users RESTART IDENTITY CASCADE`。
+- 好处：容器 cold start ≈ 10s，但每个 test ~1ms 的 TRUNCATE 就能回到干净状态。
+
+### 2.3 端口用 `127.0.0.1:0`
+避免并行测试或本地开发服务端口冲突。`AppRunner.HTTPAddr()` 必须返回实际绑定的端口（见 developer_2 接入说明）。
+
+### 2.4 Docker 不可用时静默 skip
+`TestMain` 里 `startEnv` 返 err 时 `os.Exit(0)` 而非 `os.Exit(1)`。这样 dev 笔记本 / 轻量 CI 跑 `go test ./...` 不会被 testcontainers 卡住。
+
+### 2.5 错误断言统一用 kratos errors 的 `reason` 字段
+遵循 architect 在 `biz-contracts.md §4` 的约定：
 
 ```go
-var startApp = func(dsn string) (baseURL string, shutdown func(), ready bool, err error)
+func assertErrorReason(t *testing.T, resp *apiResponse, want string)
 ```
 
-Dev_2 完成 `cmd/blog/wireApp` 后，请**不要改动**任何 `*_test.go`；只需：
+只断言 `reason`，不断言 `message`（message 是人读文案，不稳定）。
 
-1. 把 `app_stub.go` 替换为 `app_wired.go`，实现 `startApp` 为：
-   - 构造 `conf.Bootstrap`：
-     - `server.http.addr = 127.0.0.1:0`（随机端口）
-     - `data.database.source = dsn`（从参数注入）
-     - `auth.jwt_secret = "test-secret"`，`ttl = 604800`
-   - 调用 `wireApp(bootstrap.Server, bootstrap.Data, bootstrap.Auth, logger)`
-   - 后台 `go app.Run()`；轮询 HTTP 端口直到可 `TCP dial`
-   - 返回 `baseURL = "http://127.0.0.1:PORT"`，`shutdown = func() { app.Stop() }`，`ready = true`
-2. 如需从 `HTTPServer` 读取监听端口，推荐在 `server/http.go` 暴露一个 `Endpoint()`，或直接让 `wireApp` 再返回一个 `*http.Server` 以便测试取 Addr。
+### 2.6 未写 biz 层单测
+架构师在消息里也建议我写 `internal/biz/*_test.go` 的 table-test。但 team-lead 的分工明确指定我只负责 `tests/integration/`，biz 单测由 developer_1 自己做更合理（他实现时顺手 TDD）。
 
-## 覆盖矩阵
+---
 
-### 端点级覆盖（12 端点 × 正常/401/403/404）
+## 3. 覆盖矩阵
 
-| HTTP | 路径 | 正常 200 | 401 | 403 | 404 | 409 |
-|---|---|---|---|---|---|---|
-| POST | /v1/users | Register_OK, E2E | — | — | — | Register_Duplicate_409 |
-| POST | /v1/auth/login | Login_OK, E2E | Login_WrongPassword, Login_UnknownEmail | — | — | — |
-| GET | /v1/users/me | GetMe_OK | GetMe_NoToken, GetMe_InvalidToken | — | — | — |
-| POST | /v1/posts | E2E | Create_NoToken_401 | — | — | — |
-| GET | /v1/posts/{id} | E2E.GetPost | — | — | Get_NotFound_404, E2E.DeleteByAuthor_Then404 | — |
-| GET | /v1/posts | E2E.ListByTag, List_Pagination_OK | — | — | — | — |
-| PUT | /v1/posts/{id} | E2E.UpdateByAuthor | （覆盖于 Create_NoToken 同类 middleware） | E2E.UpdateOthers_Forbidden | Update_NotFound_404 | — |
-| DELETE | /v1/posts/{id} | E2E.DeleteByAuthor | — | Delete_NotOwned_403 | （通过 Then404 间接） | — |
-| POST | /v1/posts/{id}/comments | E2E.CreateComment, List_OK | Create_NoToken_401 | — | Create_PostNotFound_404 | — |
-| GET | /v1/posts/{id}/comments | E2E.ListComments, List_OK | — | — | — | — |
-| POST | /v1/posts/{id}/like | E2E.LikeIdempotent | Like_NoToken_401 | — | Like_PostNotFound_404 | — |
-| DELETE | /v1/posts/{id}/like | E2E.LikeIdempotent, Unlike_WhenNotLiked_Idempotent | Unlike_NoToken_401 | — | — | — |
+### 3.1 用户
+| 场景 | 文件 | 断言 |
+|------|------|------|
+| 注册成功 | user_test.go | 200/201，返回 id + email，不泄漏 password |
+| 注册重复邮箱 | user_test.go | 409 / USER_EMAIL_EXISTS |
+| 注册大小写变种邮箱 | user_test.go | 409（等价于小写重复） |
+| 注册密码过短 | user_test.go | 400 / VALIDATION_FAILED |
+| 登录成功 | user_test.go | 200，token 非空 |
+| 登录密码错误 | user_test.go | 401 / INVALID_CREDENTIALS |
+| `/users/me` 无 token | user_test.go | 401 / UNAUTHORIZED |
+| `/users/me` 非法 token | user_test.go | 401 |
+| `/users/me` 合法 token | user_test.go | 200，返回同一用户 |
 
-### 业务语义额外覆盖
+### 3.2 文章
+| 场景 | 文件 | 断言 |
+|------|------|------|
+| 创建 (有 token) | post_test.go | 200/201, id ≠ 0, author_id 正确, tags 保持 |
+| 创建 (无 token) | post_test.go | 401 |
+| Get (公开) | post_test.go | 200，字段回显 |
+| Get 不存在 | post_test.go | 404 / POST_NOT_FOUND |
+| Update 作者 | post_test.go | 200 |
+| Update 非作者 | post_test.go | 403 / FORBIDDEN |
+| Delete 非作者 | post_test.go | 403 |
+| Delete 作者 | post_test.go | 200/204，后续 GET=404 |
+| List 默认分页 | post_test.go | size=20, total=25 |
+| List page=2 | post_test.go | 剩余 5 条 |
+| List size=10 | post_test.go | 10 条 |
+| List tag=go | post_test.go | 15（10 专属 + 5 共享） |
+| List tag=missing | post_test.go | 空 |
+| List size>100 | post_test.go | 截到 100（seeded 25 故返 25） |
 
-- **点赞幂等**：E2E.LikeIdempotent（重复 POST /like 仍然 likes_count=1）
-- **取消幂等**：Unlike_WhenNotLiked_Idempotent（从未点赞也返回 0，不报错）
-- **删除后 404**：E2E.DeleteByAuthor_Then404
-- **参数校验 400**：Register_InvalidEmail_400（验证 validate middleware 生效）
-- **tag 过滤**：E2E.ListByTag
+### 3.3 评论
+| 场景 | 文件 | 断言 |
+|------|------|------|
+| 无 token 评论 | comment_test.go | 401 |
+| 有 token 评论 | comment_test.go | 200/201，回显 post_id/author_id/content |
+| 评论不存在的 post | comment_test.go | 404 / POST_NOT_FOUND |
+| content 空 | comment_test.go | 400 / VALIDATION_FAILED |
+| 列表公开 | comment_test.go | 200，total=7 |
+| 列表分页 | comment_test.go | size=3&page=2 → 3 条 |
 
-## 执行方式
+### 3.4 点赞（幂等性是 **重点**）
+| 场景 | 文件 | 断言 |
+|------|------|------|
+| 无 token | comment_test.go | 401 |
+| 首次 like | comment_test.go | count=1 |
+| 同用户再次 like | comment_test.go | **count 仍=1（幂等）** |
+| 另一用户 like | comment_test.go | count=2 |
+| 首次 unlike | comment_test.go | count=1 |
+| 同用户再次 unlike | comment_test.go | **count 仍=1（幂等）** |
+| like 不存在的 post | comment_test.go | 404 |
 
-```bash
-cd artifacts/code
-# 骨架状态下：TestMain 会启动 PG 容器，跑 schema.sql，
-# 因为 app_stub 的 ready=false，所有子测试 t.Skip，不会误报。
-go test ./tests/integration/... -v
+### 3.5 E2E 全流程
+一个用户走完 9 步（注册→登录→发帖→GET→list(tag)→like×2→comment→list→delete→验 404 + cascade），验收 Post/Comment/Like 整合正确。
 
-# dev_2 接入 wireApp 后：ready=true，全量跑
-go test ./tests/integration/... -v -race -cover
+---
+
+## 4. 编译 / 运行状态
+
+```
+cd prototype/M4-example2-e2e/.ai-rd-team/runtime/artifacts/code
 ```
 
-## 待 dev 产出后再做的事
+| 命令 | 结果 |
+|------|------|
+| `go vet ./tests/integration/...` | ✅ pass |
+| `go test -c -o /dev/null ./tests/integration/...` | ✅ **测试包独立编译通过** |
+| `go build ./...` | ❌ **developer_2 的 internal/server 有编译错**（非 tester 范围） |
 
-- [ ] dev_2 接入 `wireApp`；本目录下测试即可直接跑
-- [ ] 如果 biz 单测覆盖不足 70%，我补**错误路径**（bcrypt mismatch、FindByEmail not-found、Post not-owned 等）
-- [ ] 最终跑 `-cover` 并更新本文档底部的"实际覆盖率"小节
+### 4.1 上游阻塞
+developer_2 的 `internal/server/{grpc.go,http.go}` 编译错：
+- 用了 `c.HTTP / c.GRPC`，但 conf.pb.go 里字段是 `Http / Grpc`。
+- 引用了 `v1.RegisterUserServiceServer / RegisterPostServiceServer / RegisterCommentServiceServer`，但 architect 手写的 pb.go 没有定义这三个函数。
 
-## 实际覆盖率（等跑完补充）
+已经发 send_message 通知 developer_2 修。修完后 `go build ./...` 就能通过。
 
-- core path coverage: TBD（目标 ≥ 70%）
-- 总用例数：骨架阶段 29 个子用例（9 user + 5 post + 7 comment/like + 8 e2e），按端点 x 场景去重后 26 个独立断言场景
+### 4.2 要跑真实集成测试还缺什么
+1. developer_2 修完上面编译错。
+2. developer_2 新建 `tests/integration/app_factory_real.go`，`init()` 里把 `integration.AppFactory` 填上（适配 `*kratos.App` → `AppRunner`）。关键：`HTTPAddr()` 必须返回**实际绑定的端口**（用 `app.Endpoint()` 或 server 自己暴露）。
+3. Docker 可用的环境上跑 `go test -race ./tests/integration/...`。
+
+目前 AppFactory 为 nil 时 `requireApp(t)` 会把所有 HTTP 层测试 skip，完全不阻塞其他团队成员的 `go build ./...`。
+
+---
+
+## 5. 依赖（写进 go.mod 的）
+
+- `github.com/testcontainers/testcontainers-go` / `.../modules/postgres`
+- `github.com/lib/pq`（纯 database/sql 跑 schema 和 TRUNCATE）
+- `github.com/go-kratos/kratos/v2/log`（AppFactory 接口签名需要）
+
+没有 testify，没有 resty，断言全用原生 `t.Fatalf/Errorf`（符合 architect 要求）。
+
+---
+
+## 6. 未决 / 建议
+
+- **建议 developer_1 自己补 `internal/biz/*_test.go` 的 TDD 单测**。他比我更懂自己 usecase 的内部分支，手写 stub + table-test 写起来 30 分钟搞定。architect 已经列了覆盖清单。
+- **List 的 `size>100 应被 clamp` 这个行为我按 biz-contracts §3 的“size ≤ 100”写死了**；如 usecase 决定改成返 400 VALIDATION_FAILED，请告知我一下，我改 case。
+- **E2E 里删完 post 后列 comments，我把 `404` 和 `200 + empty list` 都视作可接受**；spec 没硬性规定，哪个实现方便走哪个。
+
+---
+
+## 7. 完成度
+
+- [x] 读 architect 的 spec-design.md + data-interfaces.yaml + biz-contracts.md
+- [x] main_test.go（testcontainers-go 启 PG + schema.sql）
+- [x] app_stub.go（AppFactory 钩子）
+- [x] helpers_test.go（setupTestDB / apiCall / createTestUser）
+- [x] user / post / comment / e2e_flow 四个业务 test 文件
+- [x] 本地 `go vet ./tests/integration/...` + `go test -c` 验证编译通过
+- [x] report-tester.md

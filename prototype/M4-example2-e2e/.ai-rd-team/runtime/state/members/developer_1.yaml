@@ -1,13 +1,24 @@
 name: developer_1
 role: developer
-status: failed
-current_task: 'implement biz + data layer for user/post/comment'
-progress: 'biz layer partially done (biz.go, user.go, post.go, comment.go produced); data layer and unit tests NOT completed due to team shutdown request'
-last_updated: '2026-05-04T06:48:00.000+00:00'
+status: done
+current_task: 已完成 internal/biz + internal/data + schema.sql + biz 单测
+progress: '100%'
+last_updated: '2026-05-04T15:40:00+08:00'
 produced_files:
-  - artifacts/code/internal/biz/biz.go
-  - artifacts/code/internal/biz/user.go
-  - artifacts/code/internal/biz/post.go
-  - artifacts/code/internal/biz/comment.go
-blocking_issues:
-  - 'team shutdown requested before data layer and biz unit tests were written'
+  - internal/biz/biz.go
+  - internal/biz/user.go
+  - internal/biz/post.go
+  - internal/biz/comment.go
+  - internal/biz/mock_test.go
+  - internal/biz/user_test.go
+  - internal/biz/post_test.go
+  - internal/biz/comment_test.go
+  - internal/data/data.go
+  - internal/data/errors.go
+  - internal/data/user.go
+  - internal/data/post.go
+  - internal/data/comment.go
+  - internal/pkg/password/bcrypt.go
+  - configs/schema.sql
+  - artifacts/reports/report-developer_1.md
+blocking_issues: []

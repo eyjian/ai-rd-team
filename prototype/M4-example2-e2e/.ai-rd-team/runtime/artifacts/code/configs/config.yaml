@@ -1,0 +1,15 @@
+server:
+  http:
+    addr: "0.0.0.0:8000"
+    timeout: "10s"
+  grpc:
+    addr: "0.0.0.0:9000"
+    timeout: "10s"
+data:
+  database:
+    driver: "postgres"
+    source: "postgres://blog:blog@localhost:5432/blog?sslmode=disable"
+  log_level: "info"
+auth:
+  jwt_secret: "change-me-in-prod"
+  access_ttl: "168h"

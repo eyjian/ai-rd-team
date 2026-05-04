@@ -1,15 +1,24 @@
 name: architect
 role: architect
-status: done
-current_task: "架构设计已交付，分工已通知，收到 shutdown_request"
+status: "done"
+current_task: "架构设计、契约、API 骨架交付完成"
+last_updated: "2026-05-04T15:37:50+08:00"
 progress: "100%"
-last_updated: "2026-05-04T06:47:30+00:00"
 produced_files:
-  - .ai-rd-team/runtime/artifacts/docs/architecture.md
-  - .ai-rd-team/runtime/artifacts/docs/biz-contracts.md
-  - .ai-rd-team/runtime/artifacts/code/api/blog/v1/user.proto
-  - .ai-rd-team/runtime/artifacts/code/api/blog/v1/post.proto
-  - .ai-rd-team/runtime/artifacts/code/api/blog/v1/comment.proto
-  - .ai-rd-team/runtime/artifacts/code/configs/schema.sql
-  - .ai-rd-team/runtime/artifacts/reports/report-architect.md
+  - artifacts/design/spec-design.md
+  - artifacts/design/data-interfaces.yaml
+  - artifacts/design/biz-contracts.md
+  - artifacts/design/schema.sql
+  - artifacts/design/go.mod.template
+  - artifacts/code/go.mod
+  - artifacts/code/api/blog/v1/common.proto
+  - artifacts/code/api/blog/v1/user.proto
+  - artifacts/code/api/blog/v1/post.proto
+  - artifacts/code/api/blog/v1/comment.proto
+  - artifacts/code/api/blog/v1/common.pb.go
+  - artifacts/code/api/blog/v1/user.pb.go
+  - artifacts/code/api/blog/v1/post.pb.go
+  - artifacts/code/api/blog/v1/comment.pb.go
+  - artifacts/code/api/blog/v1/errors.go
+  - artifacts/reports/report-architect.md
 blocking_issues: []

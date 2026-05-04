@@ -1,17 +1,17 @@
-// Package biz 实现博客系统的纯业务用例层。
+// Package biz 汇总业务层 Usecase 与 Repo 接口。
 //
-// 本包定义领域实体（User/Post/Comment）、仓储接口（UserRepo/PostRepo/CommentRepo）
-// 以及用例（UserUsecase/PostUsecase/CommentUsecase）。
-//
-// 硬约束：
-//   - 本包不得 import gorm.io/gorm 或 kratos/transport
-//   - 仓储接口由 internal/data 层实现，运行期通过 wire 注入
-//   - 对外暴露的错误以 Err* 形式的哨兵错误给出，由 service 层转为 kratos errors
+// 依赖原则：
+//   - biz 层只依赖标准库、kratos 基础包和 domain 内部定义的接口；
+//   - 严禁 import `gorm.io/gorm` / `database/sql` / 具体存储实现；
+//   - 对外只暴露领域模型（User/Post/Comment）和 *Usecase 聚合根。
 package biz
 
 import "github.com/google/wire"
 
-// ProviderSet 暴露给 wire 的依赖集合。
+// ProviderSet 用于 wire 依赖注入，集中导出本层的构造函数。
+//
+// 注意：Repo 接口的实现由 internal/data 提供并在顶层 wire 中绑定，
+// 这里只负责把 Usecase 构造函数登记进 ProviderSet。
 var ProviderSet = wire.NewSet(
 	NewUserUsecase,
 	NewPostUsecase,

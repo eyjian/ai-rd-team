@@ -1,155 +1,152 @@
 package integration
 
 import (
+	"fmt"
 	"net/http"
+	"net/url"
 	"testing"
 )
 
-// TestE2E_FullFlow 按照 REQUIREMENT.md 验收路径走一遍：
-// 注册 → 登录 → 发帖 → 查帖 → 列表 → 评论 → 点赞 → 幂等 → 取消 → 删除。
+// TestE2E_BlogFlow walks a single user through the full product journey
+// described in data-interfaces.yaml §tests.e2e:
 //
-// 设计要点：
-//   - 同一个用例内共享 user/post，避免重复 setup；
-//   - 另起 otherUser 用于 403 POST_NOT_OWNED 覆盖；
-//   - 每一步都断言 status + 关键业务字段；
-//   - 取消/点赞验证 likes_count 幂等语义。
-func TestE2E_FullFlow(t *testing.T) {
-	skipIfAppNotReady(t)
+//   register → login → create post → get post → list (filtered by tag)
+//   → like (twice, idempotent) → comment → list comments → delete post
+//   → verify 404
+//
+// The goal is NOT to re-assert every single rule (each unit file covers
+// those) but to confirm the pieces hang together as seen by a real client.
+func TestE2E_BlogFlow(t *testing.T) {
+	_ = setupTestDB(t)
+	client := newAPIClient(t)
 
-	alice := createTestUser(t, "alice")
-	bob := createTestUser(t, "bob")
+	// --- 1. register + login ---------------------------------------------
+	u := createTestUser(t, client, uniqueEmail(t, "e2e"), "pw-e2e-1234", "e2e-user")
+	authed := client.withToken(u.Token)
 
-	// 1. 发帖
-	postID := createTestPost(t, alice, "Hello Kratos", []string{"golang", "kratos"})
+	// GET /v1/users/me must succeed now that we have a token.
+	meResp := authed.apiCall(http.MethodGet, "/v1/users/me", nil, nil)
+	if meResp.Status != http.StatusOK {
+		t.Fatalf("GET /v1/users/me: %d %s", meResp.Status, meResp.Body)
+	}
 
-	// 2. 查单篇
-	t.Run("GetPost", func(t *testing.T) {
-		resp := apiCall(t, http.MethodGet, pathPost(postID), nil, "")
-		assertStatus(t, resp, http.StatusOK)
-		var p struct {
-			ID    int64  `json:"id"`
-			Title string `json:"title"`
-		}
-		resp.decode(t, &p)
-		if p.ID != postID || p.Title != "Hello Kratos" {
-			t.Fatalf("post mismatch: %+v", p)
-		}
-	})
+	// --- 2. create post --------------------------------------------------
+	createResp := authed.apiCall(http.MethodPost, "/v1/posts", map[string]interface{}{
+		"title":         "My first post",
+		"body_markdown": "# hi\nworld",
+		"tags":          []string{"intro", "hello"},
+	}, nil)
+	if createResp.Status != http.StatusOK && createResp.Status != http.StatusCreated {
+		t.Fatalf("create post: %d %s", createResp.Status, createResp.Body)
+	}
+	var post postDTO
+	if err := createResp.decode(&post); err != nil {
+		t.Fatalf("decode post: %v", err)
+	}
+	if post.Id == 0 {
+		t.Fatalf("post id is 0: %+v", post)
+	}
 
-	// 3. 列表按 tag 过滤
-	t.Run("ListByTag", func(t *testing.T) {
-		resp := apiCall(t, http.MethodGet, "/v1/posts?page=1&size=10&tag=golang", nil, "")
-		assertStatus(t, resp, http.StatusOK)
-		var r struct {
-			Posts []struct {
-				ID int64 `json:"id"`
-			} `json:"posts"`
-			Total int64 `json:"total"`
-		}
-		resp.decode(t, &r)
-		if r.Total < 1 {
-			t.Fatalf("list total should >= 1, got=%d", r.Total)
-		}
-		found := false
-		for _, p := range r.Posts {
-			if p.ID == postID {
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("list does not contain post %d", postID)
-		}
-	})
+	// --- 3. get post (public) --------------------------------------------
+	getResp := client.apiCall(http.MethodGet, fmt.Sprintf("/v1/posts/%d", post.Id), nil, nil)
+	if getResp.Status != http.StatusOK {
+		t.Fatalf("get post: %d %s", getResp.Status, getResp.Body)
+	}
 
-	// 4. 更新别人帖子 → 403
-	t.Run("UpdateOthers_Forbidden", func(t *testing.T) {
-		resp := apiCall(t, http.MethodPut, pathPost(postID), map[string]interface{}{
-			"title":         "Hacked",
-			"body_markdown": "hacked",
-			"tags":          []string{"x"},
-		}, bob.Token)
-		assertStatus(t, resp, http.StatusForbidden)
-		assertReason(t, resp, "POST_NOT_OWNED")
-	})
-
-	// 5. 作者自己更新 → 200
-	t.Run("UpdateByAuthor", func(t *testing.T) {
-		resp := apiCall(t, http.MethodPut, pathPost(postID), map[string]interface{}{
-			"title":         "Hello Kratos v2",
-			"body_markdown": "# updated",
-			"tags":          []string{"golang"},
-		}, alice.Token)
-		assertStatus(t, resp, http.StatusOK)
-	})
-
-	// 6. 评论
-	t.Run("CreateComment", func(t *testing.T) {
-		resp := apiCall(t, http.MethodPost, pathComments(postID), map[string]interface{}{
-			"content": "nice post",
-		}, bob.Token)
-		assertStatus(t, resp, http.StatusOK)
-	})
-
-	t.Run("ListComments", func(t *testing.T) {
-		resp := apiCall(t, http.MethodGet, pathComments(postID), nil, "")
-		assertStatus(t, resp, http.StatusOK)
-		var r struct {
-			Comments []struct {
-				Content string `json:"content"`
-			} `json:"comments"`
-			Total int64 `json:"total"`
+	// --- 4. list with tag filter -----------------------------------------
+	listResp := client.apiCall(http.MethodGet, "/v1/posts", nil,
+		url.Values{"tag": {"intro"}})
+	if listResp.Status != http.StatusOK {
+		t.Fatalf("list posts: %d %s", listResp.Status, listResp.Body)
+	}
+	var list postListDTO
+	if err := listResp.decode(&list); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if list.Total < 1 {
+		t.Errorf("expected tag=intro to match at least 1, total=%d", list.Total)
+	}
+	foundOurs := false
+	for _, p := range list.Items {
+		if p.Id == post.Id {
+			foundOurs = true
+			break
 		}
-		resp.decode(t, &r)
-		if r.Total < 1 {
-			t.Fatalf("comments total should >= 1")
-		}
-	})
+	}
+	if !foundOurs {
+		t.Errorf("our post %d not in tag=intro list: %+v", post.Id, list.Items)
+	}
 
-	// 7. 点赞 & 幂等 & 取消
-	t.Run("LikeIdempotent", func(t *testing.T) {
-		r1 := apiCall(t, http.MethodPost, pathLike(postID), nil, bob.Token)
-		assertStatus(t, r1, http.StatusOK)
-		var v1 struct {
-			LikesCount int64 `json:"likes_count"`
-			Liked      bool  `json:"liked"`
-		}
-		r1.decode(t, &v1)
-		if v1.LikesCount != 1 || !v1.Liked {
-			t.Fatalf("after 1st like: likes_count=%d liked=%v", v1.LikesCount, v1.Liked)
-		}
+	// --- 5. like + like (idempotent) -------------------------------------
+	likePath := fmt.Sprintf("/v1/posts/%d/like", post.Id)
+	if r := authed.apiCall(http.MethodPost, likePath, nil, nil); r.Status != http.StatusOK {
+		t.Fatalf("first like: %d %s", r.Status, r.Body)
+	}
+	if r := authed.apiCall(http.MethodPost, likePath, nil, nil); r.Status != http.StatusOK {
+		t.Fatalf("second like (idempotent): %d %s", r.Status, r.Body)
+	}
+	// Verify count = 1 (idempotency).
+	getResp2 := client.apiCall(http.MethodGet, fmt.Sprintf("/v1/posts/%d", post.Id), nil, nil)
+	var post2 postDTO
+	_ = getResp2.decode(&post2)
+	if post2.LikesCount != 1 {
+		t.Errorf("likes_count after two likes by same user: got %d want 1", post2.LikesCount)
+	}
 
-		// 幂等：再点一次还应该是 1
-		r2 := apiCall(t, http.MethodPost, pathLike(postID), nil, bob.Token)
-		assertStatus(t, r2, http.StatusOK)
-		var v2 struct {
-			LikesCount int64 `json:"likes_count"`
-		}
-		r2.decode(t, &v2)
-		if v2.LikesCount != 1 {
-			t.Fatalf("idempotent like: want 1 got %d", v2.LikesCount)
-		}
+	// --- 6. comment + list comments --------------------------------------
+	cResp := authed.apiCall(http.MethodPost,
+		fmt.Sprintf("/v1/posts/%d/comments", post.Id),
+		map[string]string{"content": "nice post"}, nil)
+	if cResp.Status != http.StatusOK && cResp.Status != http.StatusCreated {
+		t.Fatalf("create comment: %d %s", cResp.Status, cResp.Body)
+	}
 
-		// 取消点赞
-		r3 := apiCall(t, http.MethodDelete, pathLike(postID), nil, bob.Token)
-		assertStatus(t, r3, http.StatusOK)
-		var v3 struct {
-			LikesCount int64 `json:"likes_count"`
-			Liked      bool  `json:"liked"`
-		}
-		r3.decode(t, &v3)
-		if v3.LikesCount != 0 || v3.Liked {
-			t.Fatalf("after unlike: likes_count=%d liked=%v", v3.LikesCount, v3.Liked)
-		}
-	})
+	clResp := client.apiCall(http.MethodGet,
+		fmt.Sprintf("/v1/posts/%d/comments", post.Id), nil, nil)
+	if clResp.Status != http.StatusOK {
+		t.Fatalf("list comments: %d %s", clResp.Status, clResp.Body)
+	}
+	var cList commentListDTO
+	if err := clResp.decode(&cList); err != nil {
+		t.Fatalf("decode comments: %v", err)
+	}
+	if cList.Total != 1 {
+		t.Errorf("comments total: got %d want 1", cList.Total)
+	}
 
-	// 8. 删帖 & 404
-	t.Run("DeleteByAuthor_Then404", func(t *testing.T) {
-		resp := apiCall(t, http.MethodDelete, pathPost(postID), nil, alice.Token)
-		assertStatus(t, resp, http.StatusOK)
+	// --- 7. delete post + verify 404 + cascade ---------------------------
+	delResp := authed.apiCall(http.MethodDelete,
+		fmt.Sprintf("/v1/posts/%d", post.Id), nil, nil)
+	if delResp.Status != http.StatusOK && delResp.Status != http.StatusNoContent {
+		t.Fatalf("delete post: %d %s", delResp.Status, delResp.Body)
+	}
 
-		// 再查询应 404
-		r2 := apiCall(t, http.MethodGet, pathPost(postID), nil, "")
-		assertStatus(t, r2, http.StatusNotFound)
-		assertReason(t, r2, "POST_NOT_FOUND")
-	})
+	verifyResp := client.apiCall(http.MethodGet,
+		fmt.Sprintf("/v1/posts/%d", post.Id), nil, nil)
+	if verifyResp.Status != http.StatusNotFound {
+		t.Fatalf("post still exists after delete: %d %s", verifyResp.Status, verifyResp.Body)
+	}
+	assertErrorReason(t, verifyResp, "POST_NOT_FOUND")
+
+	// Comments should have been cascaded away — listing a deleted post's
+	// comments is allowed to return either 404 (post not found) or an
+	// empty list. Both are acceptable per the spec (not explicitly
+	// pinned); we just verify it's *not* still returning the stale row.
+	verifyCResp := client.apiCall(http.MethodGet,
+		fmt.Sprintf("/v1/posts/%d/comments", post.Id), nil, nil)
+	switch verifyCResp.Status {
+	case http.StatusNotFound:
+		// ok
+	case http.StatusOK:
+		var l commentListDTO
+		if err := verifyCResp.decode(&l); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if l.Total != 0 {
+			t.Errorf("cascade failed: %d comments remain", l.Total)
+		}
+	default:
+		t.Errorf("unexpected status listing deleted post's comments: %d %s",
+			verifyCResp.Status, verifyCResp.Body)
+	}
 }

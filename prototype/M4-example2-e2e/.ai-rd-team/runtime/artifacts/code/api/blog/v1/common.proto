@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package blog.v1;
+
+option go_package = "blog/api/blog/v1;v1";
+
+// 通用分页请求
+message PageRequest {
+  int32 page = 1;  // 从 1 起；默认 1
+  int32 size = 2;  // 默认 20，最大 100
+}

@@ -1,22 +1,8 @@
 name: tester
 role: tester
-status: done
-current_task: 'BlogAPI integration tests skeleton'
-progress: |
-  骨架阶段完成：testcontainers-go + schema.sql + 29 个子用例（表驱动 + t.Run）
-  通过 app_stub.go 的 startApp 钩子与 developer_2 的 wireApp 解耦，接入后零改动即可全量跑。
-  因团队提前关闭，未等到 developer_2 的 wireApp 接入，故用例处于 t.Skip 状态（TestMain 的 PG 容器通路可单独验证）。
-  覆盖矩阵详见 artifacts/reports/report-tester.md。
-last_updated: '2026-05-04T06:48:30.000+00:00'
-produced_files:
-  - artifacts/code/tests/integration/main_test.go
-  - artifacts/code/tests/integration/app_stub.go
-  - artifacts/code/tests/integration/helpers_test.go
-  - artifacts/code/tests/integration/paths_test.go
-  - artifacts/code/tests/integration/user_test.go
-  - artifacts/code/tests/integration/post_test.go
-  - artifacts/code/tests/integration/comment_like_test.go
-  - artifacts/code/tests/integration/e2e_flow_test.go
-  - artifacts/reports/report-tester.md
-blocking_issues:
-  - developer_2 的 wireApp 未产出，app_stub.go 仍为占位；接入后需跑 go test ./tests/integration/... -v -race -cover 以取得实际覆盖率
+status: terminated
+current_task: ''
+progress: ''
+last_updated: '2026-05-04T07:38:53.001+00:00'
+produced_files: []
+blocking_issues: []
