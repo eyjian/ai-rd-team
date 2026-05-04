@@ -46,6 +46,30 @@ def version() -> None:
 
 
 @app.command()
+def skills() -> None:
+    """显示 Skills 目录路径，用于链接到 CodeBuddy Skills 目录。"""
+    from ai_rd_team import skills_dir
+
+    path = skills_dir()
+    console.print(f"ai-rd-team Skills 目录：[bold]{path}[/bold]")
+    if not path.is_dir():
+        console.print("[yellow]⚠️ 目录不存在，可能需要从源码安装[/yellow]")
+        return
+
+    skills_found = sorted(path.glob("ai-rd-team-*.md"))
+    if skills_found:
+        console.print("\n包含的 Skills：")
+        for s in skills_found:
+            console.print(f"  - {s.name}")
+
+    console.print(
+        "\n链接到 CodeBuddy（macOS/Linux）：\n"
+        f"  [bold]ln -s {path} "
+        "~/.codebuddy/plugins/marketplaces/local/skills/ai-rd-team[/bold]"
+    )
+
+
+@app.command()
 def init(
     interactive: bool = typer.Option(
         True,

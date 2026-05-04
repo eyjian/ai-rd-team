@@ -66,6 +66,15 @@ Issues = "https://github.com/eyjian/ai-rd-team/issues"
 [tool.hatch.build.targets.wheel]
 packages = ["src/ai_rd_team"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/ai_rd_team",
+    "skills",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml",
+]
+
 # ===== Ruff =====
 [tool.ruff]
 line-length = 100

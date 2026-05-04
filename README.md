@@ -21,6 +21,8 @@
 
 ## 快速开始（骨架阶段）
 
+### 安装
+
 ```bash
 # 克隆
 git clone https://github.com/eyjian/ai-rd-team.git
@@ -29,21 +31,63 @@ cd ai-rd-team
 # 安装（开发模式）
 pip install -e ".[dev]"
 
-# 验证安装
+# 验证
 ai-rd-team version
 # ai-rd-team v0.1.0
-
-# 运行测试
-pytest
-
-# Lint
-ruff check src tests
-
-# Type check
-mypy src
 ```
 
-目前 CLI 的 `init` / `run` 等命令仍是骨架（返回 exit 1），将在 M1 阶段完成。
+### 两种使用方式
+
+#### 方式 A：Python 包 + CLI（推荐）
+
+```bash
+# 首次运行会触发 3 问引导（20 秒完成）
+cd my-project
+ai-rd-team run "做一个日报系统"
+
+# 其他命令
+ai-rd-team init --yes            # 非交互生成默认 config.yaml
+ai-rd-team config show           # 查看当前配置
+ai-rd-team config advanced       # 生成完整 config.advanced.yaml
+ai-rd-team config validate       # 校验配置
+ai-rd-team skills                # 查看 Skills 目录路径
+```
+
+**重要前提**：目前 ai-rd-team 的 Adapter 只支持 CodeBuddy，Python 引擎需要**主 Agent 代调 CodeBuddy 工具**。所以 `ai-rd-team run` 命令通常**在 CodeBuddy 会话内启动**（由 CodeBuddy 的主 Agent 通过 `execute_command` 执行），而不是独立的终端。
+
+#### 方式 B：作为 CodeBuddy Skill 使用
+
+安装 Python 包后，把 `skills/` 目录链接到 CodeBuddy Skills 目录：
+
+```bash
+# 查看 Skills 目录路径
+ai-rd-team skills
+
+# macOS/Linux 链接（路径按实际输出替换）
+ln -s $(python -c "import ai_rd_team; print(ai_rd_team.skills_dir())") \
+      ~/.codebuddy/plugins/marketplaces/local/skills/ai-rd-team
+```
+
+然后在 CodeBuddy 会话中：
+
+```
+用户：use skill ai-rd-team-launcher
+用户：做一个 TodoList 小程序
+```
+
+`ai-rd-team-launcher` Skill 会引导主 Agent 启动 Python 引擎，
+`ai-rd-team-bridge` Skill 自动激活处理引擎的工具调用。
+
+### 其他开发命令
+
+```bash
+pytest                     # 跑测试
+ruff check src tests       # Lint
+ruff format src tests      # 格式化
+mypy src                   # 类型检查
+```
+
+目前 CLI 的 `run` 命令可用但需要 CodeBuddy 主 Agent 配合 bridge Skill。若想在没有主 Agent 的情况下测试引擎，可以用 `BridgeSimulator`（见 `tests/integration/test_e2e_with_simulator.py`）。
 
 ---
 
