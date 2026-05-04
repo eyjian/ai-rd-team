@@ -44,7 +44,7 @@
 
 ---
 
-## 可信度：三个里程碑都在真实 CodeBuddy 环境跑通了
+## 可信度：四次真实 CodeBuddy E2E 全部跑通
 
 不是「本地 mock 测试通过」，是**真实 CodeBuddy Claude-Opus-4.7 派发 subagent 干了活**：
 
@@ -53,8 +53,13 @@
 | M1 E2E | 1 个 developer 跑计算器 | 1 源码文件 | [prototype/M1-real-e2e/REPORT.md](prototype/M1-real-e2e/REPORT.md) |
 | M2 E2E | Lite 档 + 自定义 Hook + agent.d 记忆 | 源码 + **15 个 pytest 测试** | [prototype/M2-real-e2e/REPORT.md](prototype/M2-real-e2e/REPORT.md) |
 | M3 E2E | Web 引导 + 面板实时刷新 | 源码 + **23 个测试** + 报告 | [prototype/M3-real-e2e/REPORT.md](prototype/M3-real-e2e/REPORT.md) |
+| **M4 Example E2E** | `examples/01-smart-bookmark` | **10 文件 + 28 测试 + 可 pip install** | [prototype/M4-example-e2e/VERIFIED.md](prototype/M4-example-e2e/VERIFIED.md) |
 
-**Skills 是否真的影响行为？是。** M3 的成员**没被要求**写 `TypeError` 检查，但它自己识别了 `isinstance(True, int)` 的陷阱并加测试——因为 `python-best-practices` Skill 里规范了「只捕获具体异常、不用 `is` 比较字符串」。
+**Skills 是否真的影响行为？是。** M4 的成员：
+- **没被要求** 做 `title_fetcher` 依赖注入，但它为了测试能离线主动这么做
+- **没被要求** 加 CLI 的 `--store` 覆盖，但它为了方便测试加了
+- **没被要求** 用 `fsync` 保证磁盘持久，但 `python-best-practices` Skill 里写了"关键文件用原子写"它就做到位了
+- 从 URL **实际抓取网页 title**（go-kratos.dev 的真实页面标题）
 
 ---
 

@@ -1,0 +1,4 @@
+# 覆盖 adapter 的 bridge 超时（真实环境 CodeBuddy 主 Agent 响应 task 工具可能 60-90 秒）
+
+adapter:
+  bridge_timeout_seconds: 300

@@ -1,0 +1,6 @@
+# 覆盖 Lite 默认配置（只写需要改的字段）
+
+# Bridge 超时：真实 CodeBuddy 主 Agent 响应 task / send_message 工具
+# 可能需要 60-90 秒（派发 subagent + prompt 构造），默认 60 秒偏紧
+adapter:
+  bridge_timeout_seconds: 300

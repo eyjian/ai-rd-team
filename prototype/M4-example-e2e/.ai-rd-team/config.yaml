@@ -1,0 +1,19 @@
+# ai-rd-team 基础配置 — SmartBookmark 示例
+
+config_version: "1.0"
+
+project:
+  description: "SmartBookmark - 命令行书签管理工具"
+
+run_mode: "lite"
+
+# 留空让架构师选（但 agent.d 里已明确 Python）
+tech_stack:
+  backend: null
+  frontend: null
+  mobile: null
+
+# Lite 档小项目的紧预算
+budget:
+  per_run: 150
+  per_day: 500

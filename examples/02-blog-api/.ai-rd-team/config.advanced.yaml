@@ -1,5 +1,9 @@
 # Advanced 配置 — 给特定角色注入 Go+Kratos Skills
 
+# Bridge 超时：真实 CodeBuddy 响应 task/send_message 可能较慢
+adapter:
+  bridge_timeout_seconds: 300
+
 roles:
   architect:
     skills:

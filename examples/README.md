@@ -32,9 +32,11 @@ ai-rd-team run "$(cat REQUIREMENT.md)"
 - `README.md` - 示例说明、预期产出、可能遇到的问题
 - `REQUIREMENT.md` - 喂给 `ai-rd-team run` 的需求描述（也可以用自然语言直接说）
 - `.ai-rd-team/config.yaml` - Basic 配置
-- `.ai-rd-team/config.advanced.yaml` - Advanced 配置（含 Skills 引用）
-- `.ai-rd-team/memory/agent.d/*.md` - 预填的背景记忆
-- `EXPECTED_OUTPUTS.md` - 成员应该产出什么
+- `.ai-rd-team/config.advanced.yaml` - Advanced 配置（含 `adapter.bridge_timeout_seconds` + 角色 Skills 引用）
+- `.ai-rd-team/memory/agent.d/tech-stack-selected.md` - 技术栈（必须用这个文件名，默认 memory_scope 才会加载）
+- `.ai-rd-team/memory/agent.d/interface-contracts.md` - 接口契约（同上，约定俗成命名）
+
+**关于 agent.d 文件命名**：默认 `memory_scope.agent_d` 是 `["tech-stack-selected", "interface-contracts", ...]`。自定义 agent.d 文件时，**必须用这些名字**，否则不会被自动加载。如需用别的名字，在 `config.advanced.yaml` 里显式配置 `roles.<role>.memory_scope.agent_d`。
 
 ## Skills 引用示例
 

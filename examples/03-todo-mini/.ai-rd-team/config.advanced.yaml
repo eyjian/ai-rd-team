@@ -1,3 +1,6 @@
+adapter:
+  bridge_timeout_seconds: 300
+
 roles:
   architect:
     skills:

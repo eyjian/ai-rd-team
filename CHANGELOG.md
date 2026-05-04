@@ -87,9 +87,21 @@ M1 真实 E2E 发现的 3 个小问题（commit `8011ad8`）：
   - Engine 新增 `_finalize_member_states` 兜底把未终态成员标 `terminated`
   - 成员自报 done 的 state 不会被覆盖
 
+M4 example E2E 发现的 2 个示例配置 bug（commit 将提交）：
+
+- **E1 agent.d 文件命名不匹配默认 memory_scope**：
+  - 默认 `developer.memory_scope.agent_d` = `["tech-stack-selected", "interface-contracts"]`
+  - 3 个 examples 原来使用 `tech-stack.md` / `cli-spec.md` 等自定义名 → 不被加载
+  - 修复：所有 examples 的 agent.d 文件改名到约定俗成的 `tech-stack-selected` / `interface-contracts`
+  - `examples/README.md` 补充命名约定说明
+- **E2 Bridge timeout 默认 60 秒，真实环境不够**：
+  - CodeBuddy 主 Agent 响应 `task` / `send_message` 通常 60-90 秒
+  - 修复：所有 examples 的 `config.advanced.yaml` 加 `adapter.bridge_timeout_seconds: 300`
+  - 注意：该字段必须放 advanced（basic schema 不包含 adapter）
+
 ### Verified
 
-三个真实 CodeBuddy 环境 E2E 报告：
+四次真实 CodeBuddy 环境 E2E 报告：
 
 - `prototype/M1-real-e2e/REPORT.md`：M1 基础引擎验证
 - `prototype/M2-real-e2e/REPORT.md`：Skills + Memory + Cost + Hook 全链路验证
@@ -98,6 +110,10 @@ M1 真实 E2E 发现的 3 个小问题（commit `8011ad8`）：
 - `prototype/M3-real-e2e/REPORT.md`：Web 面板 + driver/serve 并行验证
   - 成员产出 **23 个 pytest 测试全过**（含 bool 陷阱 + 递推验证）
   - Web 引导 + 面板实时刷新端到端可用
+- `prototype/M4-example-e2e/VERIFIED.md`：`examples/01-smart-bookmark` 示例端到端验证
+  - 成员产出 **28 个 pytest 测试全过** + 可 `pip install -e .` 的命令行工具
+  - **自动从 URL 抓取网页 title**（超出需求，展示 Skills 引导的主动性）
+  - 发现并修复 2 个 example 配置 bug（见下方 Fixed）
 
 ### Tested
 

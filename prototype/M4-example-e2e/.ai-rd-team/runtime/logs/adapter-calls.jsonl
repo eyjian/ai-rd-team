@@ -1,0 +1,2 @@
+{"ts": "2026-05-04T14:03:35.266714", "platform": "codebuddy", "op": "create_team", "team_id": "ai-rd-team-6f4b3ae3"}
+{"ts": "2026-05-04T14:04:19.998204", "platform": "codebuddy", "op": "spawn_member", "team_id": "ai-rd-team-6f4b3ae3", "member_id": "developer", "role": "developer"}
