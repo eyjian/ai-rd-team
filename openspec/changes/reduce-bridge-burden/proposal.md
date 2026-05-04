@@ -40,6 +40,8 @@ M5 第一件事就解决这个：**把不需要真实 CodeBuddy 工具能力的 
 - ❌ 不处理 Trae/Qoder 适配（单独立 change，独立里程碑）
 - ❌ 不做 RP → 真实 token/USD 成本校准（独立 change）
 
+> ✅ **属于目标内**：M5 完成后新增一条 GLM-5.1 基线对比 E2E（tasks 6.4-6.5），验证"CodeBuddy 内部切换底层模型（Claude-Opus-4.7 ↔ GLM-5.1）时，ai-rd-team 无需改一行代码即可工作"这一模型无关性主张。
+
 ## Impact
 
 ### 代码
