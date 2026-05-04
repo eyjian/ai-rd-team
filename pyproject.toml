@@ -1,0 +1,148 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-rd-team"
+version = "0.1.0"
+description = "自主驱动的数字人研发团队 - 多 AI Agent 协作研发框架"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [
+    { name = "eyjian" },
+]
+keywords = ["ai", "agent", "multi-agent", "llm", "codebuddy", "claude", "team"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development",
+]
+
+dependencies = [
+    # 配置与数据
+    "pyyaml>=6.0",
+    "ruamel.yaml>=0.18",        # 保留 YAML 注释（生成 advanced 配置时）
+    "jsonschema>=4.20",
+
+    # 文件监听
+    "watchdog>=4.0",
+
+    # CLI
+    "typer>=0.12",
+    "rich>=13.7",                # 终端美化（对话引导）
+
+    # Web 服务（M3 启用；M1/M2 不强依赖）
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "sse-starlette>=2.1",        # SSE 支持
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.4",
+    "mypy>=1.9",
+    "types-pyyaml",
+    "types-jsonschema",
+]
+
+[project.scripts]
+ai-rd-team = "ai_rd_team.cli.main:app"
+
+[project.urls]
+Homepage = "https://github.com/eyjian/ai-rd-team"
+Repository = "https://github.com/eyjian/ai-rd-team"
+Issues = "https://github.com/eyjian/ai-rd-team/issues"
+
+# ===== Hatch =====
+[tool.hatch.build.targets.wheel]
+packages = ["src/ai_rd_team"]
+
+# ===== Ruff =====
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+    "C4",  # flake8-comprehensions
+    "N",   # pep8-naming
+]
+ignore = [
+    "E501",  # line-too-long（line-length 已处理）
+    "B008",  # function call in default arg（FastAPI/Typer 需要）
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["N802", "N803"]  # 测试函数命名放宽
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ===== Mypy =====
+[tool.mypy]
+python_version = "3.10"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+show_error_codes = true
+files = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["watchdog.*", "sse_starlette.*"]
+ignore_missing_imports = true
+
+# ===== Pytest =====
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--cov=src/ai_rd_team",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+markers = [
+    "unit: 单元测试",
+    "integration: 集成测试",
+    "slow: 慢速测试（真实文件/进程）",
+]
+asyncio_mode = "auto"
+
+# ===== Coverage =====
+[tool.coverage.run]
+source = ["src/ai_rd_team"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
