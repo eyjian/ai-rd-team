@@ -392,4 +392,90 @@ def adapter_capabilities(request: Request) -> dict:
     }
 
 
+# ============================================================
+# Bridge pending intents（M5）
+# ============================================================
+
+
+# 按 op 预置的 "请主 Agent 调用 XX 工具" 指引文案
+def _hint_for_intent(intent: dict) -> str:
+    op = intent.get("op")
+    if op == "team_create":
+        return (
+            f"请调用 team_create(team_name={intent.get('team_name', '?')!r}, "
+            f"description={(intent.get('description') or '')[:60]!r}...)"
+        )
+    if op == "task":
+        return (
+            f"请调用 task(name={intent.get('name', '?')!r}, "
+            f"team_name={intent.get('team_name', '?')!r}, "
+            f"subagent_name={intent.get('subagent_name', 'code-explorer')!r}, "
+            f"prompt=..., mode='bypassPermissions')"
+        )
+    if op == "send_message":
+        msg_type = intent.get("type")
+        if msg_type == "message":
+            return (
+                f"请调用 send_message(type='message', recipient={intent.get('recipient', '?')!r}, "
+                f"content=..., summary={(intent.get('summary') or '')[:30]!r})"
+            )
+        if msg_type == "plan_approval_response":
+            return (
+                f"请调用 send_message(type='plan_approval_response', "
+                f"recipient={intent.get('recipient', '?')!r}, "
+                f"request_id={intent.get('request_id', '?')!r}, approve=...)"
+            )
+        return f"send_message type={msg_type!r}（auto-responder 未处理；请人工确认）"
+    if op == "team_delete":
+        return "请调用 team_delete()"
+    return f"未知 op: {op!r}（请查看 intent 内容后人工处理）"
+
+
+@router.get("/bridge/pending-intents")
+def list_pending_bridge_intents(request: Request) -> list[dict]:
+    """列出当前未被 AutoBridgeResponder 或主 Agent 处理的 intent。
+
+    返回：
+        List of dict：{_id, op, age_seconds, hint, type?, name?, team_name?}
+    """
+    import time as _time
+
+    runtime = _runtime(request)
+    intent_dir = runtime / "adapter-intents"
+    result_dir = runtime / "adapter-results"
+
+    if not intent_dir.is_dir():
+        return []
+
+    out: list[dict] = []
+    now = _time.time()
+    for intent_path in sorted(intent_dir.glob("*.json")):
+        intent_id = intent_path.stem
+        # 跳过已有 result（auto-responder 或主 Agent 已处理）
+        if (result_dir / f"{intent_id}.json").exists():
+            continue
+        try:
+            intent = json.loads(intent_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(intent, dict):
+            continue
+        try:
+            mtime = intent_path.stat().st_mtime
+        except OSError:
+            mtime = now
+        entry: dict = {
+            "_id": intent.get("_id", intent_id),
+            "op": intent.get("op", "?"),
+            "age_seconds": round(max(0.0, now - mtime), 2),
+            "hint": _hint_for_intent(intent),
+        }
+        # 附带关键字段便于前端展示
+        for k in ("type", "name", "team_name", "recipient", "summary"):
+            if intent.get(k) is not None:
+                entry[k] = intent[k]
+        out.append(entry)
+    return out
+
+
 __all__ = ["router"]

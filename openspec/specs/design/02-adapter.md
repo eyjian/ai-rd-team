@@ -1031,6 +1031,29 @@ class CodeBuddyToolBridgeFileBased(CodeBuddyToolBridge):
 处理完一个才处理下一个（避免工具调用并发导致的问题）。
 ```
 
+### 5.2.1 本地化初始化（M5 新增）
+
+**背景**：模式 C 下 `CodeBuddyAdapter.initialize()` 原本会通过 bridge 发 `_version` + `_probe` 两个 intent，等待主 Agent 应答后推导 `VersionInfo` 与可用工具集合。实际 E2E 表明：这两个 intent 会让 initialize 阶段阻塞数十秒（主 Agent 须先被唤醒、读 Skill、手动写 result），用户体验差，且它们不依赖真实 CodeBuddy 工具能力。
+
+**M5 变更**：`CodeBuddyAdapter.initialize()` 不再发这两个 intent，改为：
+
+| 来源 | 优先级 | 取值示例 |
+|------|--------|---------|
+| `config.adapter.version_override`（字符串） | 1 | `"claude-opus-4.7"` |
+| 代码常量 `DEFAULT_CODEBUDDY_VERSION` | 2 | `"claude-opus-4.x"` |
+| `config.adapter.available_tools_override`（list） | 1 | `["team_create", "team_delete", "task", "send_message", "custom_tool"]` |
+| 代码常量 `DEFAULT_AVAILABLE_TOOLS`（frozenset） | 2 | `{"team_create", "team_delete", "task", "send_message"}` |
+
+**核心工具缺失检查** 保持不变：`_CORE_TOOLS - available` 非空则抛 `AdapterInitError`。
+
+**兼容性**：
+
+- 旧配置零迁移：缺省值等价于 M4 末态行为
+- `BridgeSimulator` 不再被 initialize 触发，相关集成测试断言已调整为"`_probe`/`_version` ops not in processed"
+- 若未来 CodeBuddy 真的必须动态探测版本，可在 `config.adapter` 新增 `enable_bridge_probe: true`，代码层退回老路径；本次不引入此开关
+
+**关联 capability**：`adapter-bridge-auto-responder`（见 `openspec/specs/adapter-bridge-auto-responder/spec.md`）。
+
 ### 5.3 Bridge 的测试性
 
 为保证可测试：

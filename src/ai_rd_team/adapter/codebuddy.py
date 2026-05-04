@@ -5,7 +5,7 @@
 设计要点：
 - 通过 CodeBuddyToolBridge 间接调用 CodeBuddy 工具（M1 采用 FileBased Bridge）
 - 成员状态查询：不直接走工具，退化为读 runtime/state/members/ 文件
-- 版本探测：启动时调用 _probe 获取可用工具集，推导 Capabilities
+- 版本探测：M5 起本地化为内置常量 + 可选 config override（见 §5.6）
 """
 
 from __future__ import annotations
@@ -31,6 +31,20 @@ from ai_rd_team.adapter.base import (
     VersionInfo,
 )
 from ai_rd_team.adapter.bridge import BridgeToolError, CodeBuddyToolBridge
+
+# ------------------------------------------------------------
+# M5：`_version` / `_probe` 本地常量（避免 bridge 往返阻塞 initialize）
+# ------------------------------------------------------------
+# 若需临时覆盖，请在 config.adapter 中设置 `version_override` / `available_tools_override`。
+# 详见 openspec/specs/design/02-adapter.md §5.6。
+
+DEFAULT_CODEBUDDY_VERSION = "claude-opus-4.x"
+"""CodeBuddy 默认识别到的主 Agent 版本。使用模糊大版本，不写具体 minor 以降低维护负担。"""
+
+DEFAULT_AVAILABLE_TOOLS: frozenset[str] = frozenset(
+    {"team_create", "team_delete", "task", "send_message"}
+)
+"""CodeBuddy 默认可用工具集（ai-rd-team 第一期只依赖这四个）。"""
 
 
 class CodeBuddyAdapter(BaseAdapter):
@@ -68,18 +82,22 @@ class CodeBuddyAdapter(BaseAdapter):
     # ------------------------------------------------------------
 
     def initialize(self) -> None:
-        # 1. 版本 + 工具探测
-        try:
-            version = self._bridge.query_version_string()
-            available = self._bridge.probe_available_tools()
-        except TimeoutError as e:
-            raise AdapterInitError(
-                "Bridge probe timed out. 主 Agent 的 bridge 监听 Skill 可能未启用。"
-            ) from e
-        except BridgeToolError as e:
-            raise AdapterInitError(f"Bridge probe failed: {e}") from e
+        # 1. 版本：M5 起本地常量 + 可选覆盖（不再发 bridge _version intent）
+        version_override = self._config.get("version_override")
+        version = (
+            version_override
+            if isinstance(version_override, str) and version_override
+            else DEFAULT_CODEBUDDY_VERSION
+        )
 
-        # 2. 核心工具存在性检查
+        # 2. 可用工具集：同样本地默认 + 可选覆盖（不再发 bridge _probe intent）
+        tools_override = self._config.get("available_tools_override")
+        if isinstance(tools_override, (list, tuple, set, frozenset)):
+            available: frozenset[str] = frozenset(str(t) for t in tools_override)
+        else:
+            available = DEFAULT_AVAILABLE_TOOLS
+
+        # 3. 核心工具存在性检查
         missing = self._CORE_TOOLS - available
         if missing:
             raise AdapterInitError(
@@ -90,11 +108,11 @@ class CodeBuddyAdapter(BaseAdapter):
             platform=self.PLATFORM,
             version=version,
             detected_at=datetime.now(),
-            available_tools=frozenset(available),
-            notes="probed via bridge",
+            available_tools=available,
+            notes="local default (M5)" if version_override is None else "config override (M5)",
         )
 
-        # 3. 能力推导
+        # 4. 能力推导
         self._capabilities = Capabilities(
             supports_team_lifecycle=True,
             supports_async_member_spawn=True,

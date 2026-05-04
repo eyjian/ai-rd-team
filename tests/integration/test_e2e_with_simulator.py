@@ -75,11 +75,12 @@ class TestE2ELite:
         finally:
             sim.stop()
 
-        # 确认 probe/version intent 都被处理
+        # M5：initialize 不再通过 bridge 发 _probe / _version intent（本地常量化）
+        # 因此 simulator 不应处理这类 intent
         probe_entries = [p for p in sim.processed if p["op"] == "_probe"]
         version_entries = [p for p in sim.processed if p["op"] == "_version"]
-        assert len(probe_entries) == 1
-        assert len(version_entries) == 1
+        assert len(probe_entries) == 0
+        assert len(version_entries) == 0
 
     def test_full_run_lifecycle(
         self,
@@ -111,9 +112,9 @@ class TestE2ELite:
         finally:
             sim.stop()
 
-        # 验证调用顺序
+        # 验证调用顺序（M5：_probe 不再出现在 ops 里，因为 initialize 本地化了）
         ops = [p["op"] for p in sim.processed]
-        assert "_probe" in ops
+        assert "_probe" not in ops  # M5 行为变更
         assert "team_create" in ops
         assert "task" in ops
         # 启动消息 + shutdown_request

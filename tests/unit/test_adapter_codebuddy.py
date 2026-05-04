@@ -62,16 +62,85 @@ class TestInitialize:
         self,
         runtime_dir: Path,
     ) -> None:
-        # 缺少 team_create
-        bridge = InMemoryBridge(probe_tools={"task", "send_message"})
-        adapter, _ = _make_adapter(runtime_dir, bridge=bridge)
+        # M5 起工具集由 config 覆盖决定（bridge 不再参与）
+        # 这里用 available_tools_override 模拟"缺 team_create"
+        bridge = InMemoryBridge()  # bridge 的 probe_tools 不再被 initialize 使用
+        adapter = CodeBuddyAdapter(
+            config={
+                "spawn_timeout_seconds": 30,
+                "available_tools_override": ["task", "send_message"],
+            },
+            bridge=bridge,
+            runtime_dir=runtime_dir,
+        )
 
-        with pytest.raises(AdapterInitError):
+        with pytest.raises(AdapterInitError) as exc_info:
             adapter.initialize()
+        assert "team_create" in str(exc_info.value) or "team_delete" in str(exc_info.value)
 
     def test_platform_name(self, runtime_dir: Path) -> None:
         adapter, _ = _make_adapter(runtime_dir)
         assert adapter.platform_name == "codebuddy"
+
+    def test_initialize_does_not_call_bridge(self, runtime_dir: Path) -> None:
+        """M5：initialize 不再发 _version / _probe intent（本地常量化）。"""
+        from unittest.mock import Mock
+
+        bridge = Mock(spec=CodeBuddyToolBridge)
+        adapter = CodeBuddyAdapter(
+            config={"spawn_timeout_seconds": 30},
+            bridge=bridge,
+            runtime_dir=runtime_dir,
+        )
+        adapter.initialize()
+
+        # 关键断言：bridge 的 version / probe 方法均未被调用
+        assert bridge.query_version_string.call_count == 0
+        assert bridge.probe_available_tools.call_count == 0
+        # 能推出 version / capabilities
+        assert adapter.version_info.platform == "codebuddy"
+        from ai_rd_team.adapter.codebuddy import DEFAULT_CODEBUDDY_VERSION
+
+        assert adapter.version_info.version == DEFAULT_CODEBUDDY_VERSION
+
+    def test_initialize_respects_overrides(self, runtime_dir: Path) -> None:
+        """M5：config.adapter.version_override / available_tools_override 生效。"""
+        bridge = InMemoryBridge()
+        adapter = CodeBuddyAdapter(
+            config={
+                "spawn_timeout_seconds": 30,
+                "version_override": "my-custom-version",
+                "available_tools_override": [
+                    "team_create",
+                    "team_delete",
+                    "task",
+                    "send_message",
+                    "custom_tool",
+                ],
+            },
+            bridge=bridge,
+            runtime_dir=runtime_dir,
+        )
+        adapter.initialize()
+
+        assert adapter.version_info.version == "my-custom-version"
+        assert "custom_tool" in adapter.version_info.available_tools
+
+    def test_initialize_rejects_missing_required_tool(self, runtime_dir: Path) -> None:
+        """M5：override 缺必要工具时抛 AdapterInitError 且信息含工具名。"""
+        bridge = InMemoryBridge()
+        adapter = CodeBuddyAdapter(
+            config={
+                "spawn_timeout_seconds": 30,
+                # 故意少掉 team_delete
+                "available_tools_override": ["team_create", "task", "send_message"],
+            },
+            bridge=bridge,
+            runtime_dir=runtime_dir,
+        )
+        with pytest.raises(AdapterInitError) as exc_info:
+            adapter.initialize()
+        assert "team_delete" in str(exc_info.value)
 
 
 class TestTeamLifecycle:

@@ -164,6 +164,16 @@ Flask 后端通过 `send_from_directory` 提供静态文件。
 └─────────────────────────────────────────────────────────────┘
 ```
 
+**M5 新增：Pending bridge intents 卡片**
+
+总览页在"需求"卡片与"最近事件"卡片之间增加一个 Pending bridge intents 卡片，展示当前 `runtime/adapter-intents/` 下**未被 AutoBridgeResponder 自动应答**的 intent 列表。
+
+- 空状态：显示 `✅ 无需干预（_version / _probe / shutdown_* 已自动应答）`
+- 非空时：每条显示 op / 类型 / 等待时长 / name / recipient，以及"请调用 XXX 工具"的 hint 文案
+- 数据源：`GET /api/bridge/pending-intents`（每次 refresh 循环拉取）
+
+典型场景：stop_run 触发前/spawn 阶段主 Agent 尚未应答时，卡片 amber 高亮提示，帮助操作者快速知道"现在轮到我调哪个工具"。详见 `openspec/specs/adapter-bridge-auto-responder/spec.md` §Web 面板暴露 "Pending bridge intents" 视图。
+
 ### 4.2 团队页（成员卡片）
 
 每个成员一张卡片：

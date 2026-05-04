@@ -21,6 +21,7 @@ from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from ai_rd_team.adapter.auto_responder import AutoBridgeResponder
 from ai_rd_team.adapter.base import (
     BaseAdapter,
     MemberHandle,
@@ -135,6 +136,8 @@ class TeamEnvironmentManager:
         self._cost_tracker: CostTracker | None = None
         self._last_budget_action: BudgetAction = BudgetAction.CONTINUE
         self._hook_runner: HookRunner | None = None
+        # M5：file-bridge 自动应答后台线程（CodeBuddyAdapter + config.adapter.auto_bridge=true 时启动）
+        self._auto_responder: AutoBridgeResponder | None = None
 
     # ------------------------------------------------------------
     # 状态查询
@@ -232,6 +235,24 @@ class TeamEnvironmentManager:
                     runtime_dir=runtime_dir,
                 )
             self._adapter.initialize()
+
+            # M5：若是 CodeBuddyAdapter 且未显式关闭 auto_bridge，启动后台自动应答
+            # （处理 _version / _probe / shutdown_request / shutdown_response / broadcast）
+            if isinstance(self._adapter, CodeBuddyAdapter) and self._config.adapter.get(
+                "auto_bridge", True
+            ):
+                self._auto_responder = AutoBridgeResponder(
+                    runtime_dir=runtime_dir,
+                    events_file=runtime_dir / "events.jsonl",
+                )
+                self._auto_responder.start()
+                logger.info("AutoBridgeResponder enabled (adapter.auto_bridge=true)")
+            else:
+                logger.info(
+                    "AutoBridgeResponder disabled (adapter=%s, auto_bridge=%s)",
+                    self._adapter.platform_name,
+                    self._config.adapter.get("auto_bridge", True),
+                )
 
             self._state = EngineState.IDLE
             logger.info("Engine initialized; adapter=%s", self._adapter.platform_name)
@@ -757,6 +778,15 @@ class TeamEnvironmentManager:
         self._runtime_state.write_team_state(status="shut_down", team_id=team_id)
         self._runtime_state.update_run_status("stopped")
         self._runtime_state.append_event("run_stopped", run_id=run_id, reason=reason)
+
+        # M5：关闭 auto-responder 后台线程（team_delete 已应答完毕后才停，避免漏应答）
+        if self._auto_responder is not None:
+            self._auto_responder.stop(timeout=2.0)
+            logger.info(
+                "AutoBridgeResponder stats at stop: %s",
+                self._auto_responder.stats,
+            )
+            self._auto_responder = None
 
         self._state = EngineState.STOPPED
         logger.info("Run stopped: id=%s reason=%s", run_id, reason)

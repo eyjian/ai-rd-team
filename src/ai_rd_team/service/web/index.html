@@ -96,6 +96,49 @@
             </p>
           </div>
 
+          <!-- M5：Pending bridge intents（需主 Agent 介入的 intent） -->
+          <div class="bg-white p-4 rounded shadow-sm mb-4">
+            <h3 class="font-semibold mb-3">
+              Pending bridge intents
+              <span
+                v-if="pendingIntents.length"
+                class="ml-2 text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-800"
+              >
+                {{ pendingIntents.length }}
+              </span>
+            </h3>
+            <div v-if="!pendingIntents.length" class="text-sm text-green-700">
+              ✅ 无需干预（_version / _probe / shutdown_* 已自动应答）
+            </div>
+            <div v-else class="space-y-2">
+              <div
+                v-for="p in pendingIntents"
+                :key="p._id"
+                class="border-l-4 border-amber-400 pl-3 py-1"
+              >
+                <div class="flex items-baseline gap-2 flex-wrap">
+                  <span
+                    class="font-mono text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-700"
+                  >
+                    {{ p.op }}<template v-if="p.type">&nbsp;type={{ p.type }}</template>
+                  </span>
+                  <span class="text-xs text-gray-400">
+                    等待 {{ p.age_seconds }}s
+                  </span>
+                  <span v-if="p.name" class="text-xs text-gray-500"
+                    >name={{ p.name }}</span
+                  >
+                  <span v-if="p.recipient" class="text-xs text-gray-500"
+                    >→ {{ p.recipient }}</span
+                  >
+                </div>
+                <div class="text-xs text-gray-700 mt-1 font-mono break-all">
+                  {{ p.hint }}
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="bg-white p-4 rounded shadow-sm">
             <h3 class="font-semibold mb-3">最近事件</h3>
             <div class="space-y-1 max-h-96 overflow-y-auto">
@@ -646,6 +689,8 @@
           const basicConfig = ref({});
           const advancedConfig = ref({});
           const effectiveConfig = ref({});
+          // M5：file-bridge 未处理的 pending intents（需主 Agent 介入）
+          const pendingIntents = ref([]);
 
           // T3.8a 首次启动引导
           const showOnboarding = ref(false);
@@ -696,7 +741,7 @@
           }
 
           async function refresh() {
-            const [v, run, mems, msgs, evts, arts, cs, ch, bc, ac, ec, bk] =
+            const [v, run, mems, msgs, evts, arts, cs, ch, bc, ac, ec, bk, bi] =
               await Promise.all([
                 api('/api/version'),
                 api('/api/run/current'),
@@ -710,6 +755,7 @@
                 api('/api/config/advanced'),
                 api('/api/config/effective'),
                 api('/api/cost/budget-check'),
+                api('/api/bridge/pending-intents'),
               ]);
 
             if (v) version.value = v.version;
@@ -731,6 +777,7 @@
             if (ac) advancedConfig.value = ac;
             if (ec) effectiveConfig.value = ec;
             if (bk) budgetAlert.value = bk;
+            pendingIntents.value = Array.isArray(bi) ? bi : [];
           }
 
           async function checkOnboarding() {
@@ -935,6 +982,8 @@
             budgetRaiseTo,
             showBudgetAlert,
             ackBudget,
+            // M5 pending bridge intents
+            pendingIntents,
           };
         },
       }).mount('#app');

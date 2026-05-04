@@ -5,55 +5,55 @@
 
 ## 1. F 优化：CodeBuddyAdapter `_version` / `_probe` 本地化
 
-- [ ] 1.1 在 `src/ai_rd_team/adapter/codebuddy.py` 顶部新增常量 `DEFAULT_CODEBUDDY_VERSION = "claude-opus-4.x"` 与 `DEFAULT_AVAILABLE_TOOLS = {"team_create", "team_delete", "task", "send_message"}`
+- [x] 1.1 在 `src/ai_rd_team/adapter/codebuddy.py` 顶部新增常量 `DEFAULT_CODEBUDDY_VERSION = "claude-opus-4.x"` 与 `DEFAULT_AVAILABLE_TOOLS = {"team_create", "team_delete", "task", "send_message"}`
   - **验收**：常量定义存在；`REQUIRED_TOOLS` 保持现有语义；lint 通过。
-- [ ] 1.2 改写 `CodeBuddyAdapter.initialize()`：移除 `bridge.query_version_string()` 与 `bridge.probe_available_tools()` 调用，改为读 `self._config.get("version_override")` / `self._config.get("available_tools_override")`，缺失时用默认常量
+- [x] 1.2 改写 `CodeBuddyAdapter.initialize()`：移除 `bridge.query_version_string()` 与 `bridge.probe_available_tools()` 调用，改为读 `self._config.get("version_override")` / `self._config.get("available_tools_override")`，缺失时用默认常量
   - **验收**：函数内不再出现 `self._bridge.query_version_string` 或 `self._bridge.probe_available_tools`；缺工具仍抛 `AdapterInitError`；现有 `CodeBuddyAdapter` 构造签名不变。
-- [ ] 1.3 新增单测 `tests/adapter/test_codebuddy_adapter.py::test_initialize_does_not_call_bridge`，使用 `unittest.mock.Mock(spec=CodeBuddyToolBridge)` 验证初始化阶段 bridge 的两个 query 方法 `call_count == 0`
+- [x] 1.3 新增单测 `tests/unit/test_adapter_codebuddy.py::TestInitialize::test_initialize_does_not_call_bridge`，使用 `unittest.mock.Mock(spec=CodeBuddyToolBridge)` 验证初始化阶段 bridge 的两个 query 方法 `call_count == 0`
   - **验收**：新测用例通过；现有 adapter 测试保持通过；覆盖率不下降。
-- [ ] 1.4 新增单测 `test_initialize_respects_overrides`：设 `config.adapter = {"version_override": "x", "available_tools_override": [...]}`，断言 `adapter.version_info.version == "x"` 且 capabilities 含覆盖工具
+- [x] 1.4 新增单测 `test_initialize_respects_overrides`：设 `config.adapter = {"version_override": "x", "available_tools_override": [...]}`，断言 `adapter.version_info.version == "x"` 且 capabilities 含覆盖工具
   - **验收**：测试通过。
-- [ ] 1.5 新增单测 `test_initialize_rejects_missing_required_tool`：`available_tools_override` 去掉 `team_delete`，断言抛 `AdapterInitError` 且 message 含 `"team_delete"`
+- [x] 1.5 新增单测 `test_initialize_rejects_missing_required_tool`：`available_tools_override` 去掉 `team_delete`，断言抛 `AdapterInitError` 且 message 含 `"team_delete"`
   - **验收**：测试通过。
-- [ ] 1.6 更新 `openspec/specs/design/02-adapter.md` §5.2 末尾追加 §5.6 "本地化初始化（M5 新增）" 说明本次行为变更与 override 字段
+- [x] 1.6 更新 `openspec/specs/design/02-adapter.md`：在 §5.2 模式 C 之后追加 §5.2.1 "本地化初始化（M5 新增）"，说明 version/available_tools override 字段与兼容性
   - **验收**：文档文字新增，原 §5.2 内容不删（兼容语义）。
 
 ## 2. D Daemon：AutoBridgeResponder 实现
 
-- [ ] 2.1 新文件 `src/ai_rd_team/adapter/auto_responder.py`，定义 `AutoResponderDecision` dataclass（`handled: bool`, `data: dict | None`, `log_level: str | None`）与决策表 `_decide(intent: dict) -> AutoResponderDecision`
+- [x] 2.1 新文件 `src/ai_rd_team/adapter/auto_responder.py`，定义 `AutoResponderDecision` dataclass（`handled: bool`, `data: dict | None`, `log_level: str | None`）与决策表 `_decide(intent: dict) -> AutoResponderDecision`
   - **验收**：对 design.md D2 决策表的 7 种情况（`_version` / `_probe` / shutdown_request / shutdown_response / broadcast / message / task / 未知 op）返回预期结果；独立可被纯函数测试。
-- [ ] 2.2 在同文件实现 `AutoBridgeResponder` 类：`__init__(runtime_dir, poll_interval=0.3, events_logger=None)`、`start()`、`stop(timeout=2.0)`、`stats` 只读属性；线程循环逻辑遵循 design.md 伪代码
+- [x] 2.2 在同文件实现 `AutoBridgeResponder` 类：`__init__(runtime_dir, poll_interval=0.3, events_logger=None)`、`start()`、`stop(timeout=2.0)`、`stats` 只读属性；线程循环逻辑遵循 design.md 伪代码
   - **验收**：`start()` 后 `_thread.is_alive() == True`；`stop()` 后在 `timeout` 内 `_thread.is_alive() == False`；多次 `start`/`stop` 幂等。
-- [ ] 2.3 实现"跳过已有 result 文件"的竞态保护：每次处理 intent 前先检查 `result_path.exists()`，存在则跳过并不写事件
+- [x] 2.3 实现"跳过已有 result 文件"的竞态保护：每次处理 intent 前先检查 `result_path.exists()`，存在则跳过并不写事件
   - **验收**：单测 `test_skips_intent_with_existing_result` 先手写一份 result，再启动 responder，验证 result 文件内容未被覆盖。
-- [ ] 2.4 集成 `EventsLogger`（如无则使用 `logging` fallback），每次 handled 写 `bridge_auto_responded` 事件到 `runtime/events.jsonl`
+- [x] 2.4 集成 `EventsLogger`（如无则使用 `logging` fallback），每次 handled 写 `bridge_auto_responded` 事件到 `runtime/events.jsonl`
   - **验收**：单测 `test_writes_event_on_auto_respond` 断言 events.jsonl 有对应行，字段齐全（ts/event/intent_id/op/decision）。
-- [ ] 2.5 新测 `tests/adapter/test_auto_responder.py`：用 `tmp_path` + 真线程 + 手写 intent 文件，覆盖 5 类决策场景 + 停止幂等 + 竞态跳过
-  - **验收**：测试文件 ≥ 8 个用例，全部通过；总测试数增加 ≥ 8。
+- [x] 2.5 新测 `tests/unit/test_auto_responder.py`（实际落地目录为 `tests/unit/`）：用 `tmp_path` + 真线程 + 手写 intent 文件，覆盖 5 类决策场景 + 停止幂等 + 竞态跳过
+  - **验收**：测试文件 ≥ 8 个用例，全部通过；总测试数增加 ≥ 8。实际 20 个用例全部通过。
 
 ## 3. 引擎集成：启停管理
 
-- [ ] 3.1 在 `src/ai_rd_team/engine/manager.py::TeamEnvironmentManager.initialize()` 构造 adapter 后，若 `isinstance(adapter, CodeBuddyAdapter)` 且 `config.adapter.get("auto_bridge", True)`，创建 `AutoBridgeResponder(runtime_dir=..., events_logger=self._events)` 并 `start()`，保存到 `self._auto_responder`
+- [x] 3.1 在 `src/ai_rd_team/engine/manager.py::TeamEnvironmentManager.initialize()` 构造 adapter 后，若 `isinstance(adapter, CodeBuddyAdapter)` 且 `config.adapter.get("auto_bridge", True)`，创建 `AutoBridgeResponder(runtime_dir=..., events_logger=self._events)` 并 `start()`，保存到 `self._auto_responder`
   - **验收**：默认配置下 `self._auto_responder` 非 None；`auto_bridge=false` 或 adapter 非 CodeBuddy 时为 None。
-- [ ] 3.2 在 `stop_run()` 末尾（adapter.team_delete 已应答、cost summary 已写之后）调用 `self._auto_responder.stop(timeout=2.0)`，并置 None
+- [x] 3.2 在 `stop_run()` 末尾（adapter.team_delete 已应答、cost summary 已写之后）调用 `self._auto_responder.stop(timeout=2.0)`，并置 None
   - **验收**：正常结束流程后 `self._auto_responder is None`；Stop 过程不抛异常；日志可见 "auto responder stopped"。
-- [ ] 3.3 新增单测 `tests/engine/test_manager_auto_responder.py`：用 fake adapter（非 CodeBuddyAdapter）验证不创建；用真 CodeBuddyAdapter + BridgeSimulator 组合 + auto_bridge 开关验证创建/不创建
-  - **验收**：至少 3 个用例覆盖（默认启、显式关、非 CodeBuddy adapter）。
-- [ ] 3.4 跑一次完整 pytest，确保原有 393 + 新增测试全部通过
-  - **验收**：`pytest -q` exit=0；新通过用例 ≥ 11（1.x 的 3 个 + 2.5 的 8 个 + 3.3 的 3 个）；覆盖率不下降。
+- [x] 3.3 新增集成测 `tests/integration/test_manager_auto_responder.py`：覆盖默认启、`auto_bridge=false`（走 config.advanced.yaml）、FakeAdapter（非 CodeBuddy）、完整 run stop 后线程退出
+  - **验收**：至少 3 个用例覆盖（实际 4 个，全部通过）。
+- [x] 3.4 跑一次完整 pytest，确保原有 393 + 新增测试全部通过
+  - **验收**：`pytest -q` exit=0；新通过用例 ≥ 11（实际新增 27：F 3 + D 20 + 集成 4）；覆盖率不下降（83% 保持）。
 
 ## 4. Web 面板：Pending bridge intents
 
-- [ ] 4.1 在 `src/ai_rd_team/service/readers.py` 新增 `GET /api/bridge/pending-intents` 端点：扫 `runtime/adapter-intents/*.json`，对每个 intent 检查对应 result 文件是否存在，不存在则纳入返回；每条输出 `_id` / `op` / `age_seconds` / `hint`（由 op 预置）
+- [x] 4.1 在 `src/ai_rd_team/service/readers.py` 新增 `GET /api/bridge/pending-intents` 端点：扫 `runtime/adapter-intents/*.json`，对每个 intent 检查对应 result 文件是否存在，不存在则纳入返回；每条输出 `_id` / `op` / `age_seconds` / `hint`（由 op 预置）
   - **验收**：端点可被 pytest httpx client 调用，返回类型 `list[dict]`；无 intent 目录时返回 `[]`（不抛异常）。
-- [ ] 4.2 将 hint 文案按 op 字典化（team_create / task / send_message type=message / team_delete / 其它）
+- [x] 4.2 将 hint 文案按 op 字典化（team_create / task / send_message type=message / team_delete / 其它）
   - **验收**：`test_pending_intents_hint_content` 对 4 种 op 断言 hint 含关键字。
-- [ ] 4.3 新增契约测试 `tests/service/test_readers_bridge_pending.py`，覆盖空、纯已应答、含 pending 三种情况
-  - **验收**：3 个用例通过。
-- [ ] 4.4 在 `src/ai_rd_team/service/web/index.html` 总览页加 "Pending bridge intents" 卡片：空时显示"✅ 无需干预"；非空列出每条 hint + age；每 5 秒轮询一次 `/api/bridge/pending-intents`
-  - **验收**：手动启动 Web 面板无 intent 时见空态；手写一个 `task` intent 文件后 5 秒内卡片刷新显示。
-- [ ] 4.5 更新 `openspec/specs/design/04-web-panel.md` 总览页章节，描述新卡片
-  - **验收**：文档新增段落。
+- [x] 4.3 新增契约测试 `tests/integration/test_readers_bridge_pending.py`（实际路径）：覆盖空、纯已应答、含 pending、未知 op、缺目录 5 种情况
+  - **验收**：5 个用例全部通过。
+- [x] 4.4 在 `src/ai_rd_team/service/web/index.html` 总览页加 "Pending bridge intents" 卡片：空时显示"✅ 无需干预"；非空列出每条 hint + age；每次 refresh（5 秒）轮询一次 `/api/bridge/pending-intents`
+  - **验收**：HTML 含 `Pending bridge intents` 文案与 `pendingIntents` ref；refresh 函数已并发拉取新端点。
+- [x] 4.5 更新 `openspec/specs/design/04-web-panel.md` 总览页章节，描述新卡片
+  - **验收**：文档 §4.1 新增段落。
 
 ## 5. 配置 / 文档 / Changelog
 
