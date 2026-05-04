@@ -17,7 +17,9 @@
 - ✅ 项目骨架搭建
 - ✅ M1 代码实现（181 测试，85% 覆盖率）
 - ✅ **M1 真实 CodeBuddy 端到端验证通过**（`prototype/M1-real-e2e/REPORT.md`）
-- 🚧 M2 准备中
+- ✅ M2 代码实现（326 测试，85% 覆盖率，Skills/Memory/Cost/Hook/Security/Preset）
+- ✅ **M2 真实 CodeBuddy 端到端验证通过**（`prototype/M2-real-e2e/REPORT.md`）
+- 🚧 M3 准备中（Web 面板）
 
 ---
 

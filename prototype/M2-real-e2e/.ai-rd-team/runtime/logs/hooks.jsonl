@@ -1,0 +1,2 @@
+{"ts": "2026-05-04T04:15:49.981+00:00", "hook": "e2e-marker-on-start", "trigger": "run_started", "failed": false, "exit_code": 0, "duration_ms": 4, "skipped": false}
+{"ts": "2026-05-04T04:16:54.006+00:00", "hook": "e2e-stop-marker", "trigger": "run_stopped", "failed": false, "exit_code": 0, "duration_ms": 1, "skipped": false}

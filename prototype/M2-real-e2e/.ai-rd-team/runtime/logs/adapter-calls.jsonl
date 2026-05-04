@@ -1,0 +1,5 @@
+{"ts": "2026-05-04T12:14:43.942764", "platform": "codebuddy", "op": "create_team", "team_id": "ai-rd-team-2ece31f8"}
+{"ts": "2026-05-04T12:15:31.964738", "platform": "codebuddy", "op": "spawn_member", "team_id": "ai-rd-team-2ece31f8", "member_id": "developer", "role": "developer"}
+{"ts": "2026-05-04T12:15:49.974029", "platform": "codebuddy", "op": "send_message", "msg_type": "message", "from_": "main", "to": "developer"}
+{"ts": "2026-05-04T12:16:37.494026", "platform": "codebuddy", "op": "request_member_shutdown", "member_id": "developer", "reason": "团队即将关闭。请把 .ai-rd-team/runtime/state/members/<你的ID>.yaml 的 status 字段更新为 'done'（若工作完成）或 'failed'（若未完成），然后退出。原因：e2e-done"}
+{"ts": "2026-05-04T12:16:54.000675", "platform": "codebuddy", "op": "delete_team", "team_id": "ai-rd-team-2ece31f8"}

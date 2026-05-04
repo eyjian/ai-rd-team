@@ -1,0 +1,17 @@
+# M2 E2E 测试：自定义一个 Hook，在 run_started 时写个 marker 文件
+hooks:
+  enabled: true
+  builtin:
+    events_emitter: true
+    cost_tracker: true
+  custom:
+    - name: "e2e-marker-on-start"
+      trigger: "run_started"
+      priority: 50
+      command: "echo \"run_started at $(date -u +%FT%TZ) run=$RUN_ID team=$TEAM_ID\" > hook-fired.log"
+      on_failure: "warn"
+    - name: "e2e-stop-marker"
+      trigger: "run_stopped"
+      priority: 50
+      command: "echo \"run_stopped reason=$REASON run=$RUN_ID\" >> hook-fired.log"
+      on_failure: "warn"

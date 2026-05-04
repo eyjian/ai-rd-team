@@ -1,0 +1,12 @@
+config_version: "1.0"
+run_mode: "lite"
+project:
+  description: "M2 真实 E2E：验证 Skills/Memory/Cost/Hook 端到端工作"
+tech_stack:
+  backend: null
+  frontend: null
+budget:
+  per_run: 120
+  per_day: 500
+adapter:
+  bridge_timeout_seconds: 180
