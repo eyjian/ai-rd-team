@@ -234,11 +234,7 @@ class ConfigLoader:
         """深度合并：标量/数组低层覆盖，对象递归合并（§2.2）。"""
         result = copy.deepcopy(base)
         for key, override_val in override.items():
-            if (
-                key in result
-                and isinstance(result[key], dict)
-                and isinstance(override_val, dict)
-            ):
+            if key in result and isinstance(result[key], dict) and isinstance(override_val, dict):
                 result[key] = ConfigLoader._deep_merge(result[key], override_val)
             else:
                 # 标量、数组直接覆盖（包括 None 也覆盖）
@@ -258,8 +254,7 @@ class ConfigLoader:
         mode = cc.get("default_mode")
         if mode not in ("ask", "lite", "standard", "full"):
             raise ConfigValidationError(
-                f"cost_control.default_mode must be one of "
-                f"ask/lite/standard/full, got {mode!r}"
+                f"cost_control.default_mode must be one of ask/lite/standard/full, got {mode!r}"
             )
 
     def validate(
@@ -375,16 +370,10 @@ class ConfigLoader:
         w_raw = raw.get("resource_point_weights", {})
         w_default = defaults.resource_point_weights
         weights = ResourcePointWeights(
-            per_member_spawn=w_raw.get(
-                "per_member_spawn", w_default.per_member_spawn
-            ),
+            per_member_spawn=w_raw.get("per_member_spawn", w_default.per_member_spawn),
             per_message=w_raw.get("per_message", w_default.per_message),
-            per_broadcast_target=w_raw.get(
-                "per_broadcast_target", w_default.per_broadcast_target
-            ),
-            per_minute_runtime=w_raw.get(
-                "per_minute_runtime", w_default.per_minute_runtime
-            ),
+            per_broadcast_target=w_raw.get("per_broadcast_target", w_default.per_broadcast_target),
+            per_minute_runtime=w_raw.get("per_minute_runtime", w_default.per_minute_runtime),
             per_iteration=w_raw.get("per_iteration", w_default.per_iteration),
             version=w_raw.get("version", w_default.version),
         )
@@ -404,9 +393,7 @@ class ConfigLoader:
             budget_lite=budget_lite,
             budget_standard=budget_standard,
             budget_full=budget_full,
-            on_budget_exceeded=raw.get(
-                "on_budget_exceeded", defaults.on_budget_exceeded
-            ),
+            on_budget_exceeded=raw.get("on_budget_exceeded", defaults.on_budget_exceeded),
             quota_enabled=raw.get("quota_enabled", defaults.quota_enabled),
             quota_windows=quota_windows,
             quota_on_exceed=raw.get("quota_on_exceed", {}) or {},
@@ -450,9 +437,7 @@ class ConfigLoader:
 
         run_mode = raw.get("run_mode", "standard")
         if run_mode not in ("lite", "standard", "full"):
-            raise ConfigValidationError(
-                f"run_mode must be lite/standard/full, got {run_mode!r}"
-            )
+            raise ConfigValidationError(f"run_mode must be lite/standard/full, got {run_mode!r}")
 
         budget_raw = raw.get("budget", {}) or {}
         per_run = budget_raw.get("per_run", 400)
