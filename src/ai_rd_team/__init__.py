@@ -25,9 +25,7 @@ def skills_dir() -> Path:
     # 源码布局：<root>/src/ai_rd_team → <root>/skills
     candidate_src_layout = here.parent.parent / "skills"
     # 只有包含 CodeBuddy Skill 文件（ai-rd-team-*.md）才认为是 CodeBuddy Skills 目录
-    if candidate_src_layout.is_dir() and any(
-        candidate_src_layout.glob("ai-rd-team-*.md")
-    ):
+    if candidate_src_layout.is_dir() and any(candidate_src_layout.glob("ai-rd-team-*.md")):
         return candidate_src_layout
 
     # pip install 场景的退化路径（后续可能改用 importlib.resources）

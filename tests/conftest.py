@@ -21,3 +21,11 @@ def tmp_ai_rd_team_dir(tmp_workspace: Path) -> Path:
     d = tmp_workspace / ".ai-rd-team"
     d.mkdir()
     return d
+
+
+@pytest.fixture
+def tmp_quota_home(tmp_path: Path) -> Path:
+    """提供一个隔离的 quota 追踪 home 目录，避免污染用户真实 ~/.ai-rd-team。"""
+    d = tmp_path / "quota-home"
+    d.mkdir()
+    return d

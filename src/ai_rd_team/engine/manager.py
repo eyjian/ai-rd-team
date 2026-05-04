@@ -33,6 +33,13 @@ from ai_rd_team.adapter.codebuddy import CodeBuddyAdapter
 from ai_rd_team.artifacts.recorder import ArtifactRecorder
 from ai_rd_team.config.loader import ConfigLoader
 from ai_rd_team.config.models import EffectiveConfig, Role, RunMode
+from ai_rd_team.cost.tracker import (
+    BudgetAction,
+    BudgetCheckResult,
+    CostTracker,
+    QuotaTracker,
+)
+from ai_rd_team.hooks.runner import HookBlockedError, HookRunner
 from ai_rd_team.memory.manager import MemoryItem, MemoryManager
 from ai_rd_team.roles.prompt import PromptRenderer, builtin_roles
 from ai_rd_team.roles.skills_loader import (
@@ -100,15 +107,19 @@ class TeamEnvironmentManager:
         workspace: Path,
         bridge: CodeBuddyToolBridge | None = None,
         adapter: BaseAdapter | None = None,
+        quota_home_dir: Path | None = None,
     ):
         """
         Args:
             workspace: 工作区根目录
             bridge: Bridge 实例（默认 FileBasedBridge）。测试可注入 InMemoryBridge
             adapter: Adapter 实例（默认根据 config 创建 CodeBuddyAdapter）。注入后会绕过默认工厂
+            quota_home_dir: QuotaTracker 的 home 目录（默认 ``~/.ai-rd-team``）。
+                测试环境建议注入一个临时目录，避免写真实用户目录产生副作用
         """
         self.workspace = workspace
         self._state: EngineState = EngineState.IDLE
+        self._quota_home_dir = quota_home_dir
 
         self._config: EffectiveConfig | None = None
         self._ctx: RunContext | None = None
@@ -121,6 +132,9 @@ class TeamEnvironmentManager:
         self._prompt_renderer: PromptRenderer | None = None
         self._memory_manager: MemoryManager | None = None
         self._skills_loader: SkillsLoader | None = None
+        self._cost_tracker: CostTracker | None = None
+        self._last_budget_action: BudgetAction = BudgetAction.CONTINUE
+        self._hook_runner: HookRunner | None = None
 
     # ------------------------------------------------------------
     # 状态查询
@@ -186,6 +200,21 @@ class TeamEnvironmentManager:
             self._memory_manager.ensure_directories()
             self._skills_loader = SkillsLoader.create_default(
                 workspace=self.workspace / ".ai-rd-team",
+            )
+
+            # M2：成本追踪（T2.7-T2.10）
+            self._cost_tracker = CostTracker(
+                config=self._config.cost_control,
+                cost_dir=runtime_dir / "cost",
+                quota_tracker=QuotaTracker(home_dir=self._quota_home_dir),
+            )
+
+            # M2：Hook 系统（T2.11-T2.13）
+            self._hook_runner = HookRunner(
+                hooks_config=self._config.hooks or {},
+                workspace=self.workspace,
+                events_file=runtime_dir / "events.jsonl",
+                hooks_log_file=runtime_dir / "logs" / "hooks.jsonl",
             )
 
             # 3. 创建 Bridge + Adapter（若未注入）
@@ -258,6 +287,16 @@ class TeamEnvironmentManager:
                 run_id=run_id,
                 mode=mode,
             )
+            self._trigger_hook(
+                "run_starting",
+                run_id=run_id,
+                mode=mode,
+                requirement=requirement,
+            )
+
+            # M2：启动成本追踪
+            if self._cost_tracker is not None:
+                self._cost_tracker.start_run(run_id=run_id, mode=mode)
 
             # 2. 创建团队
             team_id = f"ai-rd-team-{run_id}"
@@ -312,6 +351,10 @@ class TeamEnvironmentManager:
                     role=role_name,
                 )
 
+                # M2：成本追踪
+                if self._cost_tracker is not None:
+                    self._cost_tracker.record_spawn()
+
             # 4. 发送启动消息给 starter
             starter = self._find_starter(ctx.members)
             if starter is not None:
@@ -333,9 +376,23 @@ class TeamEnvironmentManager:
                     summary="启动任务",
                 )
 
+                # M2：成本追踪
+                if self._cost_tracker is not None:
+                    self._cost_tracker.record_message(
+                        from_="main",
+                        to=starter.member_id,
+                        msg_type="message",
+                    )
+
             # 5. 切到 RUNNING
             self._runtime_state.update_run_status("running")
             self._runtime_state.append_event(
+                "run_started",
+                run_id=run_id,
+                team_id=team_id,
+                member_count=len(ctx.members),
+            )
+            self._trigger_hook(
                 "run_started",
                 run_id=run_id,
                 team_id=team_id,
@@ -355,6 +412,177 @@ class TeamEnvironmentManager:
             self._state = EngineState.ERROR
             logger.exception("start_run failed")
             raise
+
+    # ------------------------------------------------------------
+    # 升档：运行中加成员（T2.15）
+    # ------------------------------------------------------------
+
+    def add_member(
+        self,
+        role_name: str,
+        instance_name: str | None = None,
+    ) -> MemberHandle:
+        """运行中向团队追加一个成员。
+
+        - 必须处于 RUNNING 状态
+        - instance_name 默认自动生成（role 或 role_N）
+        - 同步记录成本 / 状态 / 事件 / Hook
+
+        Args:
+            role_name: 角色名（必须在 config.roles 或 builtin 中）
+            instance_name: 实例名；可伸缩角色会自动编号
+
+        Raises:
+            RuntimeError: 状态不对 / 角色不可伸缩但已存在同名实例
+            ValueError: 已有同名实例
+        """
+        self._ensure_state(EngineState.RUNNING)
+        assert self._adapter is not None
+        assert self._runtime_state is not None
+        assert self._prompt_renderer is not None
+        assert self._ctx is not None
+        assert self._ctx.team_handle is not None
+
+        role = self._resolve_role(role_name)
+
+        if instance_name is None:
+            instance_name = self._next_instance_name(role)
+
+        if instance_name in self._ctx.members:
+            raise ValueError(f"member {instance_name!r} already exists")
+
+        # 渲染 prompt
+        full_roster = self._current_roster() + [(instance_name, role_name)]
+        skills_section = self._render_skills_section(role)
+        memory_section = self._render_agent_d_section(role)
+        rendered = self._prompt_renderer.render(
+            role=role,
+            instance_name=instance_name,
+            config=self.config,
+            team_roster=full_roster,
+            skills_injected=skills_section,
+            agent_d_memory_injected=memory_section,
+        )
+        member = self._adapter.spawn_member(
+            team=self._ctx.team_handle,
+            member_id=instance_name,
+            role=role_name,
+            display_name=self._prompt_renderer._resolve_display_name(role, instance_name),
+            rendered_prompt=rendered.content,
+        )
+        self._ctx.members[instance_name] = member
+
+        # 更新状态
+        self._runtime_state.write_member_state(
+            instance_name=instance_name,
+            role=role_name,
+            status="spawning",
+        )
+        # 重新写 roster
+        self._runtime_state.write_roster([(n, m.role) for n, m in self._ctx.members.items()])
+        self._runtime_state.append_event(
+            "member_added",
+            run_id=self._ctx.run_id,
+            member_id=instance_name,
+            role=role_name,
+        )
+
+        # 成本 + Hook
+        if self._cost_tracker is not None:
+            self._cost_tracker.record_spawn()
+        self._trigger_hook(
+            "member_added",
+            run_id=self._ctx.run_id,
+            member_id=instance_name,
+            role=role_name,
+        )
+
+        logger.info(
+            "member added: run_id=%s id=%s role=%s",
+            self._ctx.run_id,
+            instance_name,
+            role_name,
+        )
+        return member
+
+    def escalate_mode(self, new_mode: RunMode) -> RunContext:
+        """升档：在运行中切换 run_mode，并按新档位补齐成员。
+
+        仅允许升档（lite → standard → full），不允许降档。
+        补齐策略：按新 mode 的默认 roster 对比当前 ctx.members，
+        缺哪个就 add_member 哪个（developer 等可伸缩角色按 mode 规则）。
+        """
+        self._ensure_state(EngineState.RUNNING)
+        assert self._ctx is not None
+
+        order: list[RunMode] = ["lite", "standard", "full"]
+        if order.index(new_mode) <= order.index(self._ctx.mode):
+            raise RuntimeError(
+                f"escalate_mode only supports upgrade; "
+                f"current={self._ctx.mode} requested={new_mode}"
+            )
+
+        old_mode = self._ctx.mode
+        target_roster = self._build_roster(new_mode)
+        existing = set(self._ctx.members.keys())
+        for instance_name, role_name in target_roster:
+            if instance_name not in existing:
+                self.add_member(role_name=role_name, instance_name=instance_name)
+
+        self._ctx = RunContext(
+            run_id=self._ctx.run_id,
+            mode=new_mode,
+            started_at=self._ctx.started_at,
+            requirement=self._ctx.requirement,
+            team_handle=self._ctx.team_handle,
+            members=self._ctx.members,
+        )
+        assert self._runtime_state is not None
+        self._runtime_state.append_event(
+            "run_upgraded",
+            run_id=self._ctx.run_id,
+            old_mode=old_mode,
+            new_mode=new_mode,
+        )
+        self._trigger_hook(
+            "run_upgraded",
+            run_id=self._ctx.run_id,
+            old_mode=old_mode,
+            new_mode=new_mode,
+        )
+        return self._ctx
+
+    def _next_instance_name(self, role: Role) -> str:
+        """为某角色生成下一个可用的 instance_name。
+
+        规则：
+        - 非 scalable：用 ``role.name``（若冲突，说明已有，调用方应报错）
+        - scalable：
+          - 若 ``role.name`` 本身未被占用且尚无任何编号实例，直接用 ``role.name``
+          - 否则生成 ``role.name_N`` 其中 N 是最大现有编号 + 1（无编号视为 1）
+        """
+        assert self._ctx is not None
+
+        if not role.scalable:
+            return role.name
+
+        names = set(self._ctx.members.keys())
+        if role.name not in names and not any(n.startswith(f"{role.name}_") for n in names):
+            return role.name
+
+        # 已经有至少一个实例，计算下一个编号
+        max_idx = 1 if role.name in names else 0
+        for n in names:
+            if n.startswith(f"{role.name}_"):
+                try:
+                    max_idx = max(max_idx, int(n.split("_")[-1]))
+                except ValueError:
+                    continue
+        return f"{role.name}_{max_idx + 1}"
+
+    def _current_roster(self) -> list[tuple[str, str]]:
+        assert self._ctx is not None
+        return [(n, m.role) for n, m in self._ctx.members.items()]
 
     # ------------------------------------------------------------
     # broadcast（T2.6）
@@ -402,6 +630,61 @@ class TeamEnvironmentManager:
             summary=summary,
         )
 
+        # M2：成本追踪
+        if self._cost_tracker is not None:
+            self._cost_tracker.record_broadcast(recipient_count=len(self._ctx.members))
+
+    # ------------------------------------------------------------
+    # 成本查询（T2.7-T2.10）
+    # ------------------------------------------------------------
+
+    def check_budget(self) -> BudgetCheckResult | None:
+        """返回当前预算检查结果（未 start_run 或无 tracker 时返回 None）。"""
+        if self._cost_tracker is None or self._cost_tracker.snapshot() is None:
+            return None
+        result = self._cost_tracker.check_budget()
+        if result.action != self._last_budget_action:
+            self._record_budget_change(result)
+        self._last_budget_action = result.action
+        return result
+
+    def cost_snapshot(self):  # type: ignore[no-untyped-def]
+        """返回当前成本快照（CostSnapshot）。未 start_run 返回 None。"""
+        if self._cost_tracker is None:
+            return None
+        return self._cost_tracker.snapshot()
+
+    def _record_budget_change(self, result: BudgetCheckResult) -> None:
+        """预算动作变化时记录事件（供 Web 面板/Hook 用）。"""
+        if self._runtime_state is None or self._ctx is None:
+            return
+        self._runtime_state.append_event(
+            "budget_action",
+            run_id=self._ctx.run_id,
+            action=result.action.value,
+            reason=result.reason.value,
+            message=result.message,
+            rp_used=result.snapshot.resource_points,
+            rp_budget=result.snapshot.rp_budget,
+        )
+        # 映射到具体 Hook 触发点
+        if result.action == BudgetAction.WARN:
+            self._trigger_hook(
+                "budget_threshold_reached",
+                run_id=self._ctx.run_id,
+                rp_used=result.snapshot.resource_points,
+                rp_budget=result.snapshot.rp_budget,
+                reason=result.reason.value,
+            )
+        elif result.action == BudgetAction.SMART_PAUSE:
+            self._trigger_hook(
+                "budget_exceeded",
+                run_id=self._ctx.run_id,
+                rp_used=result.snapshot.resource_points,
+                rp_budget=result.snapshot.rp_budget,
+                reason=result.reason.value,
+            )
+
     # ------------------------------------------------------------
     # stop_run
     # ------------------------------------------------------------
@@ -424,6 +707,11 @@ class TeamEnvironmentManager:
         team_id = self._ctx.team_handle.team_id if self._ctx.team_handle is not None else ""
 
         self._runtime_state.append_event(
+            "run_stopping",
+            run_id=run_id,
+            reason=reason,
+        )
+        self._trigger_hook(
             "run_stopping",
             run_id=run_id,
             reason=reason,
@@ -452,6 +740,19 @@ class TeamEnvironmentManager:
         # 3. 兜底：把未终止状态的成员 state 置为 terminated（F3）
         self._finalize_member_states()
 
+        # M2：关闭成本追踪 + 写 post-run 记录
+        if self._cost_tracker is not None:
+            final_snap = self._cost_tracker.end_run()
+            self._cost_tracker.write_post_run_record(notes=reason)
+            logger.info(
+                "Cost summary: rp=%s mode=%s members=%s messages=%s minutes=%.1f",
+                final_snap.resource_points,
+                final_snap.mode,
+                final_snap.member_spawn_count,
+                final_snap.message_count,
+                final_snap.runtime_minutes,
+            )
+
         # 4. 更新 state（F2：带上 team_id 避免丢字段）
         self._runtime_state.write_team_state(status="shut_down", team_id=team_id)
         self._runtime_state.update_run_status("stopped")
@@ -459,6 +760,11 @@ class TeamEnvironmentManager:
 
         self._state = EngineState.STOPPED
         logger.info("Run stopped: id=%s reason=%s", run_id, reason)
+        self._trigger_hook(
+            "run_stopped",
+            run_id=run_id,
+            reason=reason,
+        )
 
     def _finalize_member_states(self) -> None:
         """把还未到终态（done/failed/terminated）的成员 state 补齐为 terminated。
@@ -553,6 +859,22 @@ class TeamEnvironmentManager:
         return Role(name=role_name)
 
     # ------------------------------------------------------------
+    # Hook 触发封装（M2 + T2.11）
+    # ------------------------------------------------------------
+
+    def _trigger_hook(self, trigger: str, **context) -> None:
+        """统一的 Hook 触发入口。block 级 Hook 失败会向上抛，其余吞错。"""
+        if self._hook_runner is None:
+            return
+        try:
+            self._hook_runner.trigger(trigger, **context)
+        except HookBlockedError:
+            # block 级 Hook 要让调用者看见
+            raise
+        except Exception as e:
+            logger.warning("hook trigger %s failed: %s", trigger, e)
+
+    # ------------------------------------------------------------
     # M2：Skills / Memory 注入
     # ------------------------------------------------------------
 
@@ -562,9 +884,7 @@ class TeamEnvironmentManager:
             return ""
 
         try:
-            loaded: list[LoadedSkill] = self._skills_loader.load_for_role(
-                role, missing_ok=True
-            )
+            loaded: list[LoadedSkill] = self._skills_loader.load_for_role(role, missing_ok=True)
         except Exception as e:
             logger.warning("load skills for role %s failed: %s", role.name, e)
             return ""

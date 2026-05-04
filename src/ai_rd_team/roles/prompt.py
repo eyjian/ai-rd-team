@@ -350,12 +350,8 @@ _DEFAULT_ROLE_MEMORY_SCOPE: dict[str, dict[str, list[str]]] = {
             "key-decisions",
         ]
     },
-    "developer": {
-        "agent_d": ["tech-stack-selected", "interface-contracts"]
-    },
-    "reviewer": {
-        "agent_d": ["tech-stack-selected", "key-decisions"]
-    },
+    "developer": {"agent_d": ["tech-stack-selected", "interface-contracts"]},
+    "reviewer": {"agent_d": ["tech-stack-selected", "key-decisions"]},
     "tester": {"agent_d": ["interface-contracts"]},
     "devops": {"agent_d": ["tech-stack-selected"]},
 }

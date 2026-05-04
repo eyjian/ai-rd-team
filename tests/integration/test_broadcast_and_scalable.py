@@ -36,9 +36,7 @@ def _write_basic_config(ws: Path, mode: str = "standard") -> None:
 
 
 class TestAdapterBroadcast:
-    def test_broadcast_sends_broadcast_message(
-        self, tmp_workspace: Path
-    ) -> None:
+    def test_broadcast_sends_broadcast_message(self, tmp_workspace: Path) -> None:
         bridge = InMemoryBridge()
         adapter = CodeBuddyAdapter(
             config={},
@@ -49,9 +47,7 @@ class TestAdapterBroadcast:
         adapter.broadcast(content="all hands on deck", summary="通知")
 
         sends = [
-            c
-            for c in bridge.calls
-            if c["op"] == "send_message" and c.get("type") == "broadcast"
+            c for c in bridge.calls if c["op"] == "send_message" and c.get("type") == "broadcast"
         ]
         assert len(sends) == 1
         assert sends[0]["content"] == "all hands on deck"
@@ -106,9 +102,7 @@ class TestAdapterBroadcast:
 
 
 class TestEngineBroadcast:
-    def test_engine_broadcast_records_event_and_message(
-        self, tmp_workspace: Path
-    ) -> None:
+    def test_engine_broadcast_records_event_and_message(self, tmp_workspace: Path) -> None:
         _write_basic_config(tmp_workspace, mode="standard")
         bridge = InMemoryBridge()
         engine = TeamEnvironmentManager(workspace=tmp_workspace, bridge=bridge)
@@ -119,18 +113,14 @@ class TestEngineBroadcast:
 
         # bridge 收到 broadcast 调用
         sends = [
-            c
-            for c in bridge.calls
-            if c["op"] == "send_message" and c.get("type") == "broadcast"
+            c for c in bridge.calls if c["op"] == "send_message" and c.get("type") == "broadcast"
         ]
         assert len(sends) == 1
 
         # runtime/messages/ 有记录（文件中 "to": "*"）
         import json
 
-        messages_dir = (
-            tmp_workspace / ".ai-rd-team" / "runtime" / "messages"
-        )
+        messages_dir = tmp_workspace / ".ai-rd-team" / "runtime" / "messages"
         bcast_records = []
         for p in messages_dir.glob("*.json"):
             data = json.loads(p.read_text(encoding="utf-8"))
@@ -142,22 +132,13 @@ class TestEngineBroadcast:
         assert bcast_records[0]["content"] == "集合开会"
 
         # events.jsonl 包含 broadcast_sent
-        events_file = (
-            tmp_workspace / ".ai-rd-team" / "runtime" / "events.jsonl"
-        )
-        events = [
-            json.loads(line)
-            for line in events_file.read_text().splitlines()
-        ]
+        events_file = tmp_workspace / ".ai-rd-team" / "runtime" / "events.jsonl"
+        events = [json.loads(line) for line in events_file.read_text().splitlines()]
         assert any(e["event"] == "broadcast_sent" for e in events)
 
-    def test_broadcast_fails_before_start(
-        self, tmp_workspace: Path
-    ) -> None:
+    def test_broadcast_fails_before_start(self, tmp_workspace: Path) -> None:
         _write_basic_config(tmp_workspace, mode="standard")
-        engine = TeamEnvironmentManager(
-            workspace=tmp_workspace, bridge=InMemoryBridge()
-        )
+        engine = TeamEnvironmentManager(workspace=tmp_workspace, bridge=InMemoryBridge())
         engine.initialize(allow_onboarding=False, interactive=False)
 
         with pytest.raises(RuntimeError):
@@ -169,9 +150,7 @@ class TestScalableInstances:
 
     def test_lite_limits_to_one(self, tmp_workspace: Path) -> None:
         _write_basic_config(tmp_workspace, mode="lite")
-        engine = TeamEnvironmentManager(
-            workspace=tmp_workspace, bridge=InMemoryBridge()
-        )
+        engine = TeamEnvironmentManager(workspace=tmp_workspace, bridge=InMemoryBridge())
         engine.initialize(allow_onboarding=False, interactive=False)
         ctx = engine.start_run("test")
         dev_members = [m for m in ctx.members if m.startswith("developer")]
@@ -179,9 +158,7 @@ class TestScalableInstances:
 
     def test_standard_caps_at_two(self, tmp_workspace: Path) -> None:
         _write_basic_config(tmp_workspace, mode="standard")
-        engine = TeamEnvironmentManager(
-            workspace=tmp_workspace, bridge=InMemoryBridge()
-        )
+        engine = TeamEnvironmentManager(workspace=tmp_workspace, bridge=InMemoryBridge())
         engine.initialize(allow_onboarding=False, interactive=False)
         ctx = engine.start_run("test")
         dev_members = [m for m in ctx.members if m.startswith("developer")]
@@ -191,9 +168,7 @@ class TestScalableInstances:
     def test_full_uses_default_instances(self, tmp_workspace: Path) -> None:
         """Full 档：developer 应使用其 default_instances（默认 2）。"""
         _write_basic_config(tmp_workspace, mode="full")
-        engine = TeamEnvironmentManager(
-            workspace=tmp_workspace, bridge=InMemoryBridge()
-        )
+        engine = TeamEnvironmentManager(workspace=tmp_workspace, bridge=InMemoryBridge())
         engine.initialize(allow_onboarding=False, interactive=False)
         ctx = engine.start_run("test")
         dev_members = [m for m in ctx.members if m.startswith("developer")]

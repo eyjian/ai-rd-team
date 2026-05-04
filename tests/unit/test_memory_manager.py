@@ -92,17 +92,11 @@ class TestWriteAndLoad:
         assert item.frontmatter["author"] == "auto"
         assert item.frontmatter["estimated_tokens"] > 0
 
-    def test_write_preserves_created_on_update(
-        self, mm: MemoryManager
-    ) -> None:
-        first = mm.write_agent_d(
-            name="key-decisions", content="v1", author="a"
-        )
+    def test_write_preserves_created_on_update(self, mm: MemoryManager) -> None:
+        first = mm.write_agent_d(name="key-decisions", content="v1", author="a")
         original_created = first.frontmatter["created"]
 
-        second = mm.write_agent_d(
-            name="key-decisions", content="v2", author="b"
-        )
+        second = mm.write_agent_d(name="key-decisions", content="v2", author="b")
         assert second.frontmatter["created"] == original_created
         # updated 必然变（不一定不同，但肯定是新时间戳；至少不再强验证）
 
@@ -115,9 +109,7 @@ class TestWriteAndLoad:
         assert item.path.parent.name == "domain"
         assert item.path.name == "business-rules.md"
 
-    def test_write_decision_adds_title_if_missing(
-        self, mm: MemoryManager
-    ) -> None:
+    def test_write_decision_adds_title_if_missing(self, mm: MemoryManager) -> None:
         item = mm.write_decision(
             adr_id="0001",
             title="选择 Go + Kratos",
@@ -131,9 +123,7 @@ class TestWriteAndLoad:
         assert item.frontmatter["status"] == "accepted"
         assert "0001-" in item.path.name
 
-    def test_write_decision_keeps_existing_title(
-        self, mm: MemoryManager
-    ) -> None:
+    def test_write_decision_keeps_existing_title(self, mm: MemoryManager) -> None:
         item = mm.write_decision(
             adr_id="0002",
             title="Redis 策略",
@@ -148,12 +138,8 @@ class TestNextAdrId:
         assert mm.next_adr_id() == "0001"
 
     def test_increments_from_max(self, mm: MemoryManager) -> None:
-        mm.write_decision(
-            adr_id="0001", title="a", content="x", author="u"
-        )
-        mm.write_decision(
-            adr_id="0003", title="c", content="x", author="u"
-        )
+        mm.write_decision(adr_id="0001", title="a", content="x", author="u")
+        mm.write_decision(adr_id="0003", title="c", content="x", author="u")
         # 应跳过 0002 直接接 0004
         assert mm.next_adr_id() == "0004"
 
@@ -192,9 +178,7 @@ class TestLoadAgentD:
         mm.write_agent_d("big", big, author="u")
         mm.write_agent_d("small", "small content", author="u")
 
-        role = Role(
-            name="dev", memory_scope={"agent_d": ["big", "small"]}
-        )
+        role = Role(name="dev", memory_scope={"agent_d": ["big", "small"]})
         items = mm.load_agent_d(role)
         # big 超预算直接被跳过，small 可加载
         # 或 big 被计入但 small 被截断；两种都合理，只验总数 ≤ 1 即可
@@ -212,9 +196,7 @@ class TestWorkspaceOverridesGlobal:
         # 全局级写一份
         glob_dir = tmp_path / "glob" / "agent.d"
         glob_dir.mkdir(parents=True)
-        (glob_dir / "shared.md").write_text(
-            "# global version\n\nglob-content", encoding="utf-8"
-        )
+        (glob_dir / "shared.md").write_text("# global version\n\nglob-content", encoding="utf-8")
 
         # 项目级也写一份
         mm.write_agent_d("shared", "# project version\n\nproj", author="u")
@@ -230,9 +212,7 @@ class TestListDecisions:
     def test_list_all(self, mm: MemoryManager) -> None:
         mm.write_decision("0001", "A", "x", author="u", status="accepted")
         mm.write_decision("0002", "B", "x", author="u", status="proposed")
-        mm.write_decision(
-            "0003", "C", "x", author="u", status="superseded"
-        )
+        mm.write_decision("0003", "C", "x", author="u", status="superseded")
 
         got = mm.list_decisions()
         ids = [str(d.frontmatter["adr_id"]) for d in got]
@@ -249,9 +229,7 @@ class TestListDecisions:
 
 class TestLoadDecision:
     def test_load_by_id(self, mm: MemoryManager) -> None:
-        mm.write_decision(
-            "0005", "choose-go", "x", author="u", status="accepted"
-        )
+        mm.write_decision("0005", "choose-go", "x", author="u", status="accepted")
         got = mm.load_decision("0005")
         assert got is not None
         assert str(got.frontmatter["adr_id"]) == "0005"
@@ -284,16 +262,10 @@ class TestRenderAdrTemplate:
 
 
 class TestFrontmatterFormat:
-    def test_written_file_parseable_by_pyyaml(
-        self, mm: MemoryManager
-    ) -> None:
+    def test_written_file_parseable_by_pyyaml(self, mm: MemoryManager) -> None:
         """直接读回写入的文件，用 yaml 解析确认格式正确。"""
         mm.write_agent_d("probe", "# Probe\n\nbody", author="u", tags=["t1"])
-        path = (
-            mm.workspace_memory_dir
-            / MemoryLayer.AGENT_D.value
-            / "probe.md"
-        )
+        path = mm.workspace_memory_dir / MemoryLayer.AGENT_D.value / "probe.md"
         text = path.read_text(encoding="utf-8")
         assert text.startswith("---\n")
         _, rest = text.split("---\n", 1)

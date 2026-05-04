@@ -197,8 +197,7 @@ class SkillsLoader:
         scope_str, name = skill_ref.split(":", 1)
         if scope_str not in _VALID_SCOPES:
             raise SkillReferenceError(
-                f"invalid scope {scope_str!r}; "
-                f"valid scopes: builtin / global / workspace"
+                f"invalid scope {scope_str!r}; valid scopes: builtin / global / workspace"
             )
         if not name:
             raise SkillReferenceError(f"skill name is empty in {skill_ref!r}")

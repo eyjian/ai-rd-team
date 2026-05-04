@@ -126,9 +126,7 @@ def _split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     except yaml.YAMLError as e:
         raise MemoryParseError(f"failed to parse frontmatter: {e}") from e
     if not isinstance(meta, dict):
-        raise MemoryParseError(
-            f"frontmatter must be a YAML mapping, got {type(meta).__name__}"
-        )
+        raise MemoryParseError(f"frontmatter must be a YAML mapping, got {type(meta).__name__}")
     return meta, body
 
 
@@ -193,9 +191,7 @@ class MemoryManager:
     def ensure_directories(self) -> None:
         """创建项目级 memory 的三个子目录（idempotent）。"""
         for layer in MemoryLayer:
-            (self.workspace_memory_dir / layer.value).mkdir(
-                parents=True, exist_ok=True
-            )
+            (self.workspace_memory_dir / layer.value).mkdir(parents=True, exist_ok=True)
 
     # -----------------------------------------------------------------
     # 加载：agent.d（启动加载，有预算控制）
@@ -224,9 +220,7 @@ class MemoryManager:
         items: list[MemoryItem] = []
         total = 0
         for name in files:
-            item = self._find_in_layer(
-                MemoryLayer.AGENT_D, name, include_global=include_global
-            )
+            item = self._find_in_layer(MemoryLayer.AGENT_D, name, include_global=include_global)
             if item is None:
                 logger.debug("agent.d not found: %s", name)
                 continue
@@ -329,9 +323,7 @@ class MemoryManager:
                 if adr_id in seen_ids:
                     continue
                 seen_ids.add(adr_id)
-                if status_filter is not None and (
-                    item.frontmatter.get("status") != status_filter
-                ):
+                if status_filter is not None and (item.frontmatter.get("status") != status_filter):
                     continue
                 results.append(item)
         return results
@@ -393,11 +385,7 @@ class MemoryManager:
         # 去掉可能的 .md 后缀
         if relative_path.endswith(".md"):
             relative_path = relative_path[:-3]
-        path = (
-            self.workspace_memory_dir
-            / MemoryLayer.MEMORY_D.value
-            / f"{relative_path}.md"
-        )
+        path = self.workspace_memory_dir / MemoryLayer.MEMORY_D.value / f"{relative_path}.md"
         return self._write_memory_file(
             path=path,
             layer=MemoryLayer.MEMORY_D,
@@ -425,11 +413,7 @@ class MemoryManager:
         若 content 不以 ``#`` 开头，会自动加一级标题。
         """
         slug = _slugify(title)
-        path = (
-            self.workspace_memory_dir
-            / MemoryLayer.DECISIONS.value
-            / f"{adr_id}-{slug}.md"
-        )
+        path = self.workspace_memory_dir / MemoryLayer.DECISIONS.value / f"{adr_id}-{slug}.md"
 
         # 若正文不含一级标题，自动加
         if not content.lstrip().startswith("# "):
@@ -505,13 +489,9 @@ class MemoryManager:
     # 内部：解析、写入、目录遍历
     # -----------------------------------------------------------------
 
-    def _iter_scope_dirs(
-        self, include_global: bool
-    ) -> list[tuple[Path, MemoryScope]]:
+    def _iter_scope_dirs(self, include_global: bool) -> list[tuple[Path, MemoryScope]]:
         """按优先级顺序返回 scope 目录列表（project 在前）。"""
-        result: list[tuple[Path, MemoryScope]] = [
-            (self.workspace_memory_dir, MemoryScope.PROJECT)
-        ]
+        result: list[tuple[Path, MemoryScope]] = [(self.workspace_memory_dir, MemoryScope.PROJECT)]
         if include_global and self.global_memory_dir is not None:
             result.append((self.global_memory_dir, MemoryScope.GLOBAL))
         return result

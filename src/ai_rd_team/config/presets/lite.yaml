@@ -1,0 +1,69 @@
+# ai-rd-team 档位预设：Lite（最小团队）
+#
+# 适用场景：
+# - 小需求快速原型（单 demo / 工具脚本 / 小 bug 修复）
+# - 探索性需求（不确定最终形态，先跑通再扩）
+# - 成本敏感（学习 / 个人项目）
+#
+# 用法：
+#   cp <此文件> .ai-rd-team/config.advanced.yaml
+# 或：
+#   ai-rd-team config preset --mode lite
+
+config_version: "1.0"
+
+# 运行档位
+run_mode: "lite"
+
+# 成本控制（单次预算、日/周/月配额）
+cost_control:
+  enabled: true
+  budget_lite:
+    max_members: 2
+    max_messages: 20
+    max_broadcasts: 0           # Lite 禁止广播
+    max_runtime_minutes: 30
+    max_total_iterations: 5
+    max_resource_points: 120
+  quota_windows:
+    per_day: 500
+    per_week: 2000
+    per_month: 5000
+  model_fallback:
+    enabled: true
+    trigger_threshold: 0.75
+    strategy: "hybrid"
+
+# 启用的角色（Lite 只要 1 developer）
+roles:
+  developer:
+    enabled: true
+    scalable: true
+    default_instances: 1
+    max_instances: 1
+    skills:
+      - "python-best-practices"
+
+# 安全约束（沿用默认黑名单 + 工作区白名单）
+security:
+  commands:
+    blocked: []                 # 追加的黑名单，默认项内置
+  file_access:
+    writable:
+      - ".ai-rd-team/runtime/"
+    readonly:
+      - ".git/"
+      - ".ai-rd-team/memory/decisions/"
+    forbidden:
+      - "/etc/"
+      - ".ssh/"
+
+# Hook（Lite 只开内置最精简）
+hooks:
+  enabled: true
+  builtin:
+    events_emitter: true
+    log_every_message: false
+    auto_save_state: false
+    cost_tracker: true
+    git_auto_commit_on_phase: false

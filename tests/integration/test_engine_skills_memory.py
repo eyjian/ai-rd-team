@@ -93,9 +93,7 @@ class TestMemoryInjection:
         _write_basic_config(tmp_workspace, mode="lite")
 
         # 提前准备一个 agent.d 文件
-        agent_d = (
-            tmp_workspace / ".ai-rd-team" / "memory" / "agent.d"
-        )
+        agent_d = tmp_workspace / ".ai-rd-team" / "memory" / "agent.d"
         agent_d.mkdir(parents=True, exist_ok=True)
         (agent_d / "team-roster.md").write_text(
             "---\ntype: memory\nlayer: agent.d\nauthor: auto\n"
@@ -130,14 +128,10 @@ class TestMemoryInjection:
         assert "团队成员清单" in prompt
         assert "陈架构" in prompt
 
-    def test_memory_dir_created_on_initialize(
-        self, tmp_workspace: Path
-    ) -> None:
+    def test_memory_dir_created_on_initialize(self, tmp_workspace: Path) -> None:
         """initialize 后 memory/ 三层目录应自动创建。"""
         _write_basic_config(tmp_workspace, mode="lite")
-        engine = TeamEnvironmentManager(
-            workspace=tmp_workspace, bridge=InMemoryBridge()
-        )
+        engine = TeamEnvironmentManager(workspace=tmp_workspace, bridge=InMemoryBridge())
         engine.initialize(allow_onboarding=False, interactive=False)
 
         memory = tmp_workspace / ".ai-rd-team" / "memory"

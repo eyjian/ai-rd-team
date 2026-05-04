@@ -315,6 +315,46 @@ def config_advanced(
     console.print(f"✅ 已生成：[bold]{target}[/bold]")
 
 
+@config_app.command("preset")
+def config_preset(
+    mode: str = typer.Option(
+        "standard",
+        "--mode",
+        "-m",
+        help="lite / standard / full",
+    ),
+    workspace: Path | None = typer.Option(None, "--workspace", "-w"),
+    force: bool = typer.Option(False, "--force", help="已存在时覆盖"),
+    list_only: bool = typer.Option(False, "--list", help="只列出可用 preset，不导出"),
+) -> None:
+    """导出档位 preset 到 `.ai-rd-team/config.advanced.yaml`。"""
+    from ai_rd_team.config.presets_loader import (
+        PresetError,
+        export_preset_to_workspace,
+        list_presets,
+    )
+
+    if list_only:
+        presets = list_presets()
+        console.print("可用 preset：")
+        for p in presets:
+            console.print(f"  - {p}")
+        return
+
+    ws = workspace or Path.cwd()
+    try:
+        dst = export_preset_to_workspace(mode, ws, force=force)
+    except PresetError as e:
+        console.print(f"[red]导出失败：[/red]{e}")
+        raise typer.Exit(code=1) from None
+
+    console.print(f"✅ 已导出 preset [bold]{mode}[/bold] 到：{dst}")
+    console.print("\n建议：")
+    console.print("  1. 根据项目实际需要编辑该文件")
+    console.print("  2. ai-rd-team config validate 校验")
+    console.print("  3. ai-rd-team run '你的需求' 启动")
+
+
 @config_app.command("validate")
 def config_validate(
     workspace: Path | None = typer.Option(None, "--workspace", "-w"),

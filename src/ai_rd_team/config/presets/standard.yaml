@@ -1,0 +1,88 @@
+# ai-rd-team 档位预设：Standard（推荐）
+#
+# 适用场景：
+# - 中等功能模块开发（API / 前端页面 / 业务逻辑）
+# - 需要多角色协作但控制成本
+# - 大多数项目的默认选择
+#
+# 用法：
+#   cp <此文件> .ai-rd-team/config.advanced.yaml
+
+config_version: "1.0"
+
+run_mode: "standard"
+
+cost_control:
+  enabled: true
+  budget_standard:
+    max_members: 5
+    max_messages: 100
+    max_broadcasts: 3
+    max_runtime_minutes: 120
+    max_total_iterations: 15
+    max_resource_points: 400
+  quota_windows:
+    per_day: 2000
+    per_week: 10000
+    per_month: 30000
+  model_fallback:
+    enabled: true
+    trigger_threshold: 0.75
+    strategy: "hybrid"
+
+# 启用的角色：architect + 2 dev + tester
+roles:
+  architect:
+    enabled: true
+    skills:
+      - "code-review-checklist"
+    memory_scope:
+      agent_d:
+        - "tech-stack-selected"
+        - "interface-contracts"
+        - "key-decisions"
+
+  developer:
+    enabled: true
+    scalable: true
+    default_instances: 2
+    max_instances: 3
+    skills:
+      - "python-best-practices"
+      - "pytest-guide"
+    memory_scope:
+      agent_d:
+        - "tech-stack-selected"
+        - "interface-contracts"
+
+  tester:
+    enabled: true
+    scalable: true
+    default_instances: 1
+    skills:
+      - "pytest-guide"
+    memory_scope:
+      agent_d:
+        - "interface-contracts"
+
+security:
+  commands:
+    blocked: []
+  file_access:
+    writable:
+      - ".ai-rd-team/runtime/"
+    readonly:
+      - ".git/"
+      - ".ai-rd-team/memory/decisions/"
+    forbidden:
+      - "/etc/"
+      - ".ssh/"
+
+hooks:
+  enabled: true
+  builtin:
+    events_emitter: true
+    log_every_message: true
+    auto_save_state: true
+    cost_tracker: true
+    git_auto_commit_on_phase: false

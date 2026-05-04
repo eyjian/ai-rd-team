@@ -88,9 +88,7 @@ class TestLoad:
         assert skill.content.startswith("# Foo")
         assert skill.estimated_tokens > 0
 
-    def test_workspace_overrides_global_overrides_builtin(
-        self, tmp_path: Path
-    ) -> None:
+    def test_workspace_overrides_global_overrides_builtin(self, tmp_path: Path) -> None:
         loader = SkillsLoader(
             builtin_dir=tmp_path / "b",
             global_dir=tmp_path / "g",
@@ -104,9 +102,7 @@ class TestLoad:
         assert skill.scope == "workspace"
         assert skill.content == "workspace-content"
 
-    def test_global_fallback_when_workspace_missing(
-        self, tmp_path: Path
-    ) -> None:
+    def test_global_fallback_when_workspace_missing(self, tmp_path: Path) -> None:
         loader = SkillsLoader(
             builtin_dir=tmp_path / "b",
             global_dir=tmp_path / "g",

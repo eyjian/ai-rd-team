@@ -304,9 +304,7 @@ class BaseAdapter(abc.ABC):
             from_member: 发送者（默认 main）
         """
         if not self.capabilities.supports_broadcast:
-            raise CapabilityNotSupportedError(
-                f"{self.platform_name} does not support broadcast"
-            )
+            raise CapabilityNotSupportedError(f"{self.platform_name} does not support broadcast")
         self.send_message(
             Message(
                 from_member=from_member,

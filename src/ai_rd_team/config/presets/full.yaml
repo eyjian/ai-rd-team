@@ -1,0 +1,129 @@
+# ai-rd-team 档位预设：Full（完整团队）
+#
+# 适用场景：
+# - 新项目从 0 → 1（含 PRD / 架构 / 开发 / 评审 / 测试 / 部署）
+# - 复杂系统设计决策多（需要 architect 和 reviewer 对抗性协作）
+# - 生产级交付（有 devops 参与部署）
+#
+# 用法：
+#   cp <此文件> .ai-rd-team/config.advanced.yaml
+
+config_version: "1.0"
+
+run_mode: "full"
+
+cost_control:
+  enabled: true
+  budget_full:
+    max_members: 15
+    max_messages: 300
+    max_broadcasts: 10
+    max_runtime_minutes: 480
+    max_total_iterations: 50
+    max_resource_points: 1500
+  quota_windows:
+    per_day: 6000
+    per_week: 30000
+    per_month: 80000
+  model_fallback:
+    enabled: true
+    trigger_threshold: 0.75
+    strategy: "hybrid"
+
+# 全角色启用
+roles:
+  pm:
+    enabled: true
+    memory_scope:
+      agent_d:
+        - "team-roster"
+        - "current-phase"
+        - "key-decisions"
+
+  analyst:
+    enabled: true
+    memory_scope:
+      agent_d:
+        - "domain-terms"
+        - "current-phase"
+
+  architect:
+    enabled: true
+    skills:
+      - "code-review-checklist"
+    memory_scope:
+      agent_d:
+        - "tech-stack-selected"
+        - "interface-contracts"
+        - "key-decisions"
+
+  developer:
+    enabled: true
+    scalable: true
+    default_instances: 3
+    max_instances: 5
+    skills:
+      - "python-best-practices"
+      - "pytest-guide"
+    memory_scope:
+      agent_d:
+        - "tech-stack-selected"
+        - "interface-contracts"
+
+  reviewer:
+    enabled: true
+    scalable: true
+    default_instances: 1
+    max_instances: 2
+    skills:
+      - "code-review-checklist"
+      - "python-best-practices"
+    memory_scope:
+      agent_d:
+        - "tech-stack-selected"
+        - "key-decisions"
+
+  tester:
+    enabled: true
+    scalable: true
+    default_instances: 1
+    skills:
+      - "pytest-guide"
+    memory_scope:
+      agent_d:
+        - "interface-contracts"
+
+  devops:
+    enabled: true
+    memory_scope:
+      agent_d:
+        - "tech-stack-selected"
+
+security:
+  commands:
+    blocked: []
+  file_access:
+    writable:
+      - ".ai-rd-team/runtime/"
+    readonly:
+      - ".git/"
+      - ".ai-rd-team/memory/decisions/"
+    forbidden:
+      - "/etc/"
+      - ".ssh/"
+
+hooks:
+  enabled: true
+  builtin:
+    events_emitter: true
+    log_every_message: true
+    auto_save_state: true
+    cost_tracker: true
+    git_auto_commit_on_phase: false
+
+  # Full 档推荐添加：阶段完成时自动提交
+  # custom:
+  #   - name: "git-commit-on-phase"
+  #     trigger: "phase_complete"
+  #     command: "git add -A && git commit -m 'phase $PHASE done'"
+  #     on_failure: "warn"
