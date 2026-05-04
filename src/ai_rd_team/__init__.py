@@ -5,7 +5,7 @@
 
 from pathlib import Path
 
-__version__ = "0.1.0a1"
+__version__ = "0.1.0b1"
 
 
 def skills_dir() -> Path:

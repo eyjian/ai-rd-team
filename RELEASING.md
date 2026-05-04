@@ -2,7 +2,7 @@
 
 本项目用 [Hatchling](https://hatch.pypa.io/) 构建，[Twine](https://twine.readthedocs.io/) 上传。
 
-## 0.1.0a1 → TestPyPI（当前状态）
+## 发布到 PyPI（首发 0.1.0b1 及后续所有版本）
 
 ### 前置：TestPyPI 账号与 API Token
 

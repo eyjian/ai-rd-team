@@ -5,10 +5,11 @@
 > 不是"提示词工程"，不是"工作流编排"。  
 > 是"你搭一个数字人团队，他们自己协作把活干完"。
 
-[![Tests](https://img.shields.io/badge/tests-393%20passed-brightgreen)]()
-[![Coverage](https://img.shields.io/badge/coverage-85%25-green)]()
+[![Tests](https://img.shields.io/badge/tests-425%20passed-brightgreen)]()
+[![Coverage](https://img.shields.io/badge/coverage-83%25-green)]()
 [![Python](https://img.shields.io/badge/python-3.10+-blue)]()
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.1.0b1-orange)]()
 
 ---
 
@@ -64,7 +65,7 @@
 
 ---
 
-## 当前状态（v0.1.0-alpha）
+## 当前状态（v0.1.0b1，beta）
 
 | 里程碑 | 状态 | 交付物 |
 |-------|------|-------|
@@ -72,6 +73,7 @@
 | M2 完整团队 | ✅ | Skills + Memory + Cost + Hook + Security + Preset + 升档 |
 | M3 Web 面板 | ✅ | 14 读 + 4 写端点 + SSE + Vue3 单页 + Web 引导 |
 | M4 打磨发布 | ✅ | README + docs/ + 3 个示例 + 6 内置 Skills + CHANGELOG + CI |
+| M5 减轻 bridge 负担 | ✅ | AutoBridgeResponder + Web Pending 卡片（E2E 手动应答 12→7，降幅 42%） |
 
 **设计文档**：`openspec/specs/design/` 下 12 份共 10,764 行，覆盖架构总览 → 引擎 → 适配层 → REST API → Web 面板 → 角色 → 记忆 → 制品 → 成本 → Hook → 配置 → 运行时协议。
 

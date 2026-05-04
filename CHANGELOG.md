@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Planned
+
+- 首次在 GLM-5.1 上的跨模型基线 E2E（见 `docs/follow-ups/GLM51-compat.md`），需 CodeBuddy 侧切换模型会话后补跑
+- 多平台 Adapter（Trae / Cursor / Windsurf / Claude Desktop），架构路径待定，见 `openspec/specs/2026-05-04-multi-platform-brainstorming.md`
+- 更多内置 Skills（Go+Kratos / Vue3 / 微信小程序的完整 SOP 深化）
+- 演示视频录制与文档截图
+
+---
+
+## [0.1.0b1] - 2026-05-04
+
+首个 beta 版本（PEP 440: `0.1.0b1`）。相较 `0.1.0a1`，M5 完成"降低 bridge 负担"能力，E2E 场景下主 Agent 手动应答次数从 11-12 次降到 7 次（降幅 42%），initialize 从 ~38 秒降到 ~7 毫秒。正式进入 Beta：功能冻结、求用户试用、API 不再破坏性变更。
+
 ### Added (M5 - reduce-bridge-burden)
 
 - **AutoBridgeResponder**（`src/ai_rd_team/adapter/auto_responder.py`）：file-bridge 协议之上的后台自动应答组件，自动处理 `_version` / `_probe` / `shutdown_request` / `shutdown_response` / `broadcast` 五类 intent，降低 E2E 场景下主 Agent 手动介入次数。真工具类 intent（team_create / task / send_message type=message / team_delete）保持由主 Agent 处理。
@@ -15,27 +28,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - REST 端点 `GET /api/bridge/pending-intents`：返回未被 auto-responder 处理的 intent 列表，含每条 `op` / `hint` / `age_seconds`。
 - Web 总览页新增 **Pending bridge intents** 卡片：空态显示"✅ 无需干预"，非空 amber 高亮列出每条 intent 的工具调用提示。
 - `events.jsonl` 新增事件类型 `bridge_auto_responded`。
-- OpenSpec change：`openspec/changes/reduce-bridge-burden/`（proposal + design + specs + tasks），含 GLM-5.1 跨模型基线对比任务。
+- `docs/06-bridge-and-auto-responder.md`：面向用户的 bridge 协议与 auto-responder 使用说明。
+- OpenSpec：新增正式 spec `openspec/specs/adapter-bridge-auto-responder/spec.md`（5 个 requirement），change `reduce-bridge-burden` 归档到 `openspec/changes/archive/2026-05-04-reduce-bridge-burden/`。
 
 ### Changed (M5)
 
 - **BREAKING（内部行为）**：`CodeBuddyAdapter.initialize()` 不再通过 bridge 发 `_version` / `_probe` intent，改用本地常量 `DEFAULT_CODEBUDDY_VERSION` / `DEFAULT_AVAILABLE_TOOLS`。同步修改 2 个集成测试断言（`_probe` / `_version` ops 不再出现在 `BridgeSimulator.processed` 中）。
 - 旧用户配置无需修改：缺省等价于启用 auto_bridge + 用默认 version/tool 常量。
 - `openspec/specs/design/02-adapter.md` §5.2.1、`04-web-panel.md` §4.1、`10-config-schema.md` adapter 节、`11-runtime-protocol.md` §8.3 同步更新。
+- Classifier 从 "Development Status :: 3 - Alpha" 升级为 "4 - Beta"。
+
+### Verified (M5)
+
+- `prototype/M4-example2-e2e/VERIFIED-m5.md`：Claude-Opus-4.7 baseline blog-api Standard 档 E2E。
+  - 手动应答 **7 次**（M4 baseline 12 次，降幅 42%）
+  - initialize **7 ms**（M4 baseline ~38 s）
+  - auto-responder 自动应答 4 次 shutdown_request
+  - `go build ./...` / `go vet ./...` / biz test 全绿，可执行二进制 27.6 MB
+- `pytest` **425 passed**，`ruff check` / `ruff format --check` 全绿，覆盖率保持 83%+。
 
 ### Migration
 
-- 从 0.1.0a1 升级：无需任何配置变更。
+- 从 `0.1.0a1` → `0.1.0b1`：无需任何配置变更。
 - 若遇 auto-responder 兼容问题，在 `config.advanced.yaml` 写 `adapter: {auto_bridge: false}` 回退。
 - 若 CodeBuddy 升级到不同版本字符串，在 `config.advanced.yaml` 写 `adapter: {version_override: "claude-opus-4.8"}` 覆盖。
 
-### Planned
+### Deferred
 
-- TestPyPI 上传验证（本地构建 + twine check 已通过，上传需要账号 token，流程见 `RELEASING.md`）
-- 正式 PyPI 发布（等 TestPyPI 稳定）
-- 更多内置 Skills（Go+Kratos / Vue3 / 微信小程序的完整 SOP 深化）
-- 演示视频录制与文档截图
-- Web 面板增强：成员消息发送、制品在线编辑
+- GLM-5.1 基线对比 E2E 从 M5 拆分为独立 follow-up（阻塞外部条件：需 CodeBuddy 侧切到 GLM-5.1 会话执行），跟踪文档 `docs/follow-ups/GLM51-compat.md`。
 
 ---
 

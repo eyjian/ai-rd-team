@@ -7,13 +7,46 @@
 
 ## 安装
 
+ai-rd-team 当前处于 beta 阶段（`0.1.0b1`），**未发布到 PyPI**。有三种本地安装方式，任选其一：
+
+### 方式 1：从源码可编辑安装（推荐开发者）
+
 ```bash
 git clone https://github.com/eyjian/ai-rd-team.git
 cd ai-rd-team
 pip install -e ".[dev]"
+```
 
-# 验证
-ai-rd-team version
+### 方式 2：从源码直接安装（推荐纯使用）
+
+```bash
+git clone https://github.com/eyjian/ai-rd-team.git
+cd ai-rd-team
+pip install .
+```
+
+### 方式 3：从预构建 wheel 安装
+
+仓库 `dist/` 目录提供构建好的 wheel / sdist：
+
+```bash
+pip install /path/to/ai-rd-team/dist/ai_rd_team-0.1.0b1-py3-none-any.whl
+```
+
+也可以本地自己构建：
+
+```bash
+cd ai-rd-team
+pip install -e ".[publish]"
+rm -rf dist/ && python -m build
+pip install dist/ai_rd_team-*.whl
+```
+
+### 验证
+
+```bash
+ai-rd-team version    # → ai-rd-team v0.1.0b1
+ai-rd-team --help     # 查看全部子命令
 ```
 
 ## 跑第一个示例
