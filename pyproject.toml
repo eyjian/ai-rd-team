@@ -4,24 +4,48 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-rd-team"
-version = "0.1.0"
-description = "自主驱动的数字人研发团队 - 多 AI Agent 协作研发框架"
-readme = "README.md"
+version = "0.1.0a1"
+description = "Self-driven digital research team: a multi-agent collaboration framework for AI-assisted software development"
+readme = { file = "README.md", content-type = "text/markdown" }
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
 authors = [
-    { name = "eyjian" },
+    { name = "eyjian", email = "eyjian@qq.com" },
 ]
-keywords = ["ai", "agent", "multi-agent", "llm", "codebuddy", "claude", "team"]
+maintainers = [
+    { name = "eyjian", email = "eyjian@qq.com" },
+]
+keywords = [
+    "ai",
+    "agent",
+    "multi-agent",
+    "llm",
+    "codebuddy",
+    "claude",
+    "team",
+    "autonomous",
+    "software-engineering",
+    "code-generation",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3 :: Only",
     "Topic :: Software Development",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
 
 dependencies = [
@@ -54,13 +78,19 @@ dev = [
     "types-pyyaml",
     "types-jsonschema",
 ]
+publish = [
+    "build>=1.0",
+    "twine>=5.0",
+]
 
 [project.scripts]
 ai-rd-team = "ai_rd_team.cli.main:app"
 
 [project.urls]
 Homepage = "https://github.com/eyjian/ai-rd-team"
+Documentation = "https://github.com/eyjian/ai-rd-team/tree/main/docs"
 Repository = "https://github.com/eyjian/ai-rd-team"
+Changelog = "https://github.com/eyjian/ai-rd-team/blob/main/CHANGELOG.md"
 Issues = "https://github.com/eyjian/ai-rd-team/issues"
 
 # ===== Hatch =====

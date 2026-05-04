@@ -9,16 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Planned
 
-- PyPI 正式发布（目前仅 test 仓）
-- 更多内置 Skills（Go+Kratos、Vue3、微信小程序的完整 SOP）
+- TestPyPI 上传验证（本地构建 + twine check 已通过，上传需要账号 token，流程见 `RELEASING.md`）
+- 正式 PyPI 发布（等 TestPyPI 稳定）
+- 更多内置 Skills（Go+Kratos / Vue3 / 微信小程序的完整 SOP 深化）
 - 演示视频录制与文档截图
 - Web 面板增强：成员消息发送、制品在线编辑
 
 ---
 
-## [0.1.0-alpha] - 2026-05-04
+## [0.1.0a1] - 2026-05-04
 
-首个 alpha 版本。**M1 + M2 + M3 三个里程碑全部在真实 CodeBuddy 环境下端到端验证通过**。
+首个 alpha 版本（PEP 440: `0.1.0a1`）。**M1 + M2 + M3 + M4 四个里程碑全部在真实 CodeBuddy 环境下端到端验证通过**。
 
 ### Added
 
@@ -71,6 +72,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `CostTracker.raise_rp_budget` 动态调整预算硬限
   - 前端告警模态
 - CLI `serve` 命令：独立启动只读 Web 面板
+
+#### M4 - 打磨发布
+
+- 3 个内置 Skills 新增：`go-kratos-basics` / `vue3-basics` / `wxmini-basics`
+  （共 6 个 builtin Skills，覆盖 Python + Go + 前端）
+- 3 个完整示例：`examples/01-smart-bookmark` / `02-blog-api` / `03-todo-mini`
+  （含 REQUIREMENT + config + agent.d memory + EXPECTED_OUTPUTS）
+- `docs/` 使用手册 5 篇（快速上手 / 配置 / 角色 / Skills / 成本）
+- `CHANGELOG.md` 按 Keep a Changelog 规范
+- `RELEASING.md` 发布流程 + 版本号规范 + 清单
+- `py.typed` 标记（支持下游 mypy 严格类型检查）
+- CI workflow 新增 build job（验证 wheel 可 import + 关键资源完整）
+- `pyproject.toml` 完善：
+  - `version = "0.1.0a1"`（PEP 440 alpha）
+  - License 更正为 Apache 2.0（原 MIT 与 LICENSE 文件内容不一致）
+  - `[project.optional-dependencies].publish`（build + twine）
+  - 补充 Classifiers（FastAPI / Typing / AI / Code Generators）
+  - URLs 补 Documentation / Changelog
+  - Wheel 显式 include 非 .py 资源
 
 ### Fixed
 

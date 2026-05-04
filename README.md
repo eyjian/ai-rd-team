@@ -8,7 +8,7 @@
 [![Tests](https://img.shields.io/badge/tests-389%20passed-brightgreen)]()
 [![Coverage](https://img.shields.io/badge/coverage-85%25-green)]()
 [![Python](https://img.shields.io/badge/python-3.10+-blue)]()
-[![License](https://img.shields.io/badge/license-MIT-blue)]()
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)]()
 
 ---
 
@@ -334,7 +334,7 @@ pytest --cov=src/ai_rd_team  # 覆盖率报告（term + html）
 
 ## License
 
-[MIT](LICENSE)
+[Apache License 2.0](LICENSE)
 
 ---
 
