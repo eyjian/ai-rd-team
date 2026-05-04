@@ -1,0 +1,13 @@
+config_version: "1.0"
+run_mode: "lite"
+project:
+  description: "M1 真实 CodeBuddy 端到端验证：做一个最简单的 hello 函数"
+tech_stack:
+  backend: null
+  frontend: null
+  mobile: null
+budget:
+  per_run: 120
+  per_day: 500
+adapter:
+  bridge_timeout_seconds: 120

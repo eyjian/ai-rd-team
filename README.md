@@ -14,8 +14,10 @@
 - ✅ 原型验证通过（`prototype/REPORT.md`）
 - ✅ 详细设计完成（12 份，10,764 行，`openspec/specs/design/`）
 - ✅ 实现路线图（`openspec/specs/design/ROADMAP.md`）
-- ✅ 项目骨架搭建（本次）
-- 🚧 M1 实现中
+- ✅ 项目骨架搭建
+- ✅ M1 代码实现（181 测试，85% 覆盖率）
+- ✅ **M1 真实 CodeBuddy 端到端验证通过**（`prototype/M1-real-e2e/REPORT.md`）
+- 🚧 M2 准备中
 
 ---
 

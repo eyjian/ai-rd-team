@@ -1,0 +1,7 @@
+run_id: 502a7fcc
+started_at: '2026-05-04T11:08:15.943237'
+requirement: '请实现一个 Python 函数 hello(name: str) -> str，返回 f''Hello, {name}!''。保存为 hello.py
+  放到 artifacts/code/ 目录。不需要单测，不需要其他文件。完成后发消息给 main 说你完成了。'
+mode: lite
+status: stopped
+updated_at: '2026-05-04T11:10:49.009081'

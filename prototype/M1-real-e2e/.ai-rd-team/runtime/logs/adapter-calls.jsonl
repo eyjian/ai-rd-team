@@ -1,0 +1,5 @@
+{"ts": "2026-05-04T11:08:40.954576", "platform": "codebuddy", "op": "create_team", "team_id": "ai-rd-team-502a7fcc"}
+{"ts": "2026-05-04T11:09:26.972866", "platform": "codebuddy", "op": "spawn_member", "team_id": "ai-rd-team-502a7fcc", "member_id": "developer", "role": "developer"}
+{"ts": "2026-05-04T11:09:52.483626", "platform": "codebuddy", "op": "send_message", "msg_type": "message", "from_": "main", "to": "developer"}
+{"ts": "2026-05-04T11:10:26.498493", "platform": "codebuddy", "op": "request_member_shutdown", "member_id": "developer", "reason": "test done"}
+{"ts": "2026-05-04T11:10:49.007582", "platform": "codebuddy", "op": "delete_team", "team_id": "ai-rd-team-502a7fcc"}
