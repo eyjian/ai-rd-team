@@ -781,6 +781,8 @@ class SkillsLoader:
 
 > 实现参见 [src/ai_rd_team/roles/skills_loader.py](../../../src/ai_rd_team/roles/skills_loader.py)。frontmatter 的解析采用**按行扫描 O(n)** 而非正则，避免病态输入下的炸裂回溯；YAML 解析错误 / 顶层非 mapping 均被容错为 `metadata=None`，但 `---` 块仍会被剥离。
 
+> CLI 入口：`ai-rd-team roles-skill list / show`（实现见 [src/ai_rd_team/cli/main.py](../../../src/ai_rd_team/cli/main.py) 的 `roles_skill_app`）。该命令组消费 `SkillsLoader.list_available()` + `LoadedSkill.metadata`，列出三层全部 skill 的 `description / default_for` 元数据，并支持 `--scope` 过滤、`--json` 脚本化输出、`show <ref> --content` 查看正文。注意与 `ai-rd-team skills`（CodeBuddy plugin marketplace 安装信息）是两个独立命令，避免概念混淆。
+
 ### 6.5 加载时机与注入方式（基于 P2 保守假设）
 
 **基于 P2 未验证"自动加载"的保守假设**：Skills 在成员 spawn 时**显式注入到 prompt**，而不是依赖 CodeBuddy 自动发现。

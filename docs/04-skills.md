@@ -53,6 +53,17 @@ roles:
 python -c "from ai_rd_team import builtin_skills_dir; print(builtin_skills_dir())"
 ```
 
+或者通过 CLI 列出三层全部 Skill（含 description / default_for）：
+```bash
+ai-rd-team roles-skill list                  # 三层全列
+ai-rd-team roles-skill list --scope builtin  # 只看某层
+ai-rd-team roles-skill list --json           # JSON 输出，便于脚本消费
+ai-rd-team roles-skill show pytest-guide     # 查看单个 Skill 的元数据
+ai-rd-team roles-skill show pytest-guide --content   # 顺便打印正文
+```
+
+> 注意：`ai-rd-team roles-skill *` 是项目内 Skill 体系的命令，对应注入数字员工 prompt 的三层加载（builtin / global / workspace）；不要和 `ai-rd-team skills`（CodeBuddy plugin marketplace 安装信息）混淆。
+
 ## 编写自定义 Skill
 
 Skill 是一个 Markdown 文件，推荐包含：

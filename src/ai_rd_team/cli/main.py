@@ -7,6 +7,11 @@ M1 实现：
 - init: 触发首次引导
 - run: 启动团队
 - config show / advanced / validate: 基础配置命令
+
+附加命令（M2+）：
+- skills (单数命令): CodeBuddy plugin marketplace 安装信息
+- roles-skill list / show: 项目内三层 Skill（builtin/global/workspace），
+  注入数字员工 prompt（注意与 ``skills`` 命令的语义区分）
 """
 
 from __future__ import annotations
@@ -447,6 +452,187 @@ def config_validate(
         raise typer.Exit(code=1)
 
     console.print("✅ 配置校验通过")
+
+
+# ============================================================
+# roles-skill 子命令（项目内 Skill 体系：注入到数字员工 prompt）
+# ============================================================
+#
+# 注意：与单数命令 ``ai-rd-team skills`` 区分——
+# - ``ai-rd-team skills``       -> CodeBuddy plugin marketplace 安装信息
+# - ``ai-rd-team roles-skill *`` -> 项目内三层 Skill（builtin/global/workspace），
+#                                   spawn 数字员工时注入到其 system prompt
+#
+# 设计文档：openspec/specs/design/05-roles-skills.md
+
+roles_skill_app = typer.Typer(
+    help="管理注入数字员工 prompt 的项目内 Skill（builtin / global / workspace 三层）",
+)
+app.add_typer(roles_skill_app, name="roles-skill")
+
+
+def _truncate(text: str, width: int = 80) -> str:
+    """单行截断字符串，超长尾部用 ``…`` 标记。"""
+    text = text.replace("\n", " ").strip()
+    if len(text) <= width:
+        return text
+    return text[: width - 1].rstrip() + "…"
+
+
+def _format_default_for(default_for: tuple[str, ...]) -> str:
+    """格式化 default_for 字段为人类可读字符串。"""
+    if not default_for:
+        return "（需在 config 显式引用）"
+    return "默认装配: " + ", ".join(default_for)
+
+
+@roles_skill_app.command("list")
+def roles_skill_list(
+    workspace: Path | None = typer.Option(
+        None, "--workspace", "-w", help="工作区目录（默认当前目录）"
+    ),
+    json_output: bool = typer.Option(False, "--json", help="JSON 格式输出，便于脚本消费"),
+    scope: str | None = typer.Option(
+        None,
+        "--scope",
+        help="只列出某层：builtin / global / workspace",
+    ),
+) -> None:
+    """列出三层可用的 Skill（含元数据：description + default_for）。"""
+    from ai_rd_team.roles.skills_loader import SkillsLoader
+
+    if scope is not None and scope not in ("builtin", "global", "workspace"):
+        console.print(
+            f"[red]无效的 scope {scope!r}，必须是 builtin/global/workspace[/red]"
+        )
+        raise typer.Exit(code=2)
+
+    ws = workspace or Path.cwd()
+    loader = SkillsLoader.create_default(workspace=ws / ".ai-rd-team")
+    available = loader.list_available()
+
+    # 收集每个 skill 的元数据（容错：单个文件出错不影响整体）
+    layers: dict[str, list[dict[str, object]]] = {}
+    for layer_name, names in available.items():
+        if scope is not None and layer_name != scope:
+            continue
+        rows: list[dict[str, object]] = []
+        for name in names:
+            try:
+                skill = loader.load(f"{layer_name}:{name}")
+                rows.append({
+                    "name": name,
+                    "scope": layer_name,
+                    "description": skill.description,
+                    "default_for": list(skill.default_for),
+                    "estimated_tokens": skill.estimated_tokens,
+                    "path": str(skill.path),
+                })
+            except Exception as e:  # noqa: BLE001 - 单个文件解析失败不能拖垮列表
+                rows.append({
+                    "name": name,
+                    "scope": layer_name,
+                    "description": None,
+                    "default_for": [],
+                    "estimated_tokens": 0,
+                    "path": "",
+                    "error": str(e),
+                })
+        layers[layer_name] = rows
+
+    if json_output:
+        import json
+
+        # 注意：用 print 而非 console.print，避免 Rich 的 ANSI 控制字符污染 JSON
+        print(json.dumps(layers, ensure_ascii=False, indent=2))
+        return
+
+    # 人类可读格式
+    icons = {"builtin": "📦", "global": "🏠", "workspace": "📁"}
+    placeholders = {
+        "builtin": "（无 builtin skill）",
+        "global": f"（空，可放到 {Path.home() / '.ai-rd-team' / 'skills'}/）",
+        "workspace": f"（空，可放到 {ws / '.ai-rd-team' / 'skills'}/）",
+    }
+
+    for layer_name in ("builtin", "global", "workspace"):
+        if layer_name not in layers:
+            continue
+        rows = layers[layer_name]
+        icon = icons[layer_name]
+        title = f"{icon} {layer_name.capitalize()} ({len(rows)})"
+        console.print(f"\n[bold]{title}[/bold]")
+
+        if not rows:
+            console.print(f"  [dim]{placeholders[layer_name]}[/dim]")
+            continue
+
+        for row in rows:
+            name = row["name"]
+            default_for = tuple(row.get("default_for", []) or ())  # type: ignore[arg-type]
+            err = row.get("error")
+            if err:
+                console.print(f"  [red]✗[/red] {name}  [red]解析失败：{err}[/red]")
+                continue
+
+            tag = _format_default_for(default_for)
+            tag_color = "cyan" if default_for else "dim"
+            console.print(f"  [green]✓[/green] [bold]{name}[/bold]  [{tag_color}]{tag}[/{tag_color}]")
+
+            desc = row.get("description")
+            if desc:
+                console.print(f"    [dim]{_truncate(str(desc))}[/dim]")
+
+
+@roles_skill_app.command("show")
+def roles_skill_show(
+    skill_ref: str = typer.Argument(
+        ...,
+        help="Skill 引用：name 或 scope:name（如 'python-best-practices' 或 'builtin:pytest-guide'）",
+    ),
+    workspace: Path | None = typer.Option(
+        None, "--workspace", "-w", help="工作区目录（默认当前目录）"
+    ),
+    show_content: bool = typer.Option(
+        False, "--content", help="同时打印 Skill 正文（注入数字员工 prompt 的内容）"
+    ),
+) -> None:
+    """查看单个 Skill 的元数据和路径。"""
+    from ai_rd_team.roles.skills_loader import (
+        SkillNotFoundError,
+        SkillReferenceError,
+        SkillsLoader,
+    )
+
+    ws = workspace or Path.cwd()
+    loader = SkillsLoader.create_default(workspace=ws / ".ai-rd-team")
+
+    try:
+        skill = loader.load(skill_ref)
+    except SkillReferenceError as e:
+        console.print(f"[red]引用语法错误：{e}[/red]")
+        raise typer.Exit(code=2) from e
+    except SkillNotFoundError as e:
+        console.print(f"[red]Skill 未找到：{e}[/red]")
+        raise typer.Exit(code=1) from e
+
+    table = Table(title=f"Skill: {skill.ref}")
+    table.add_column("字段", style="cyan")
+    table.add_column("值")
+    table.add_row("name", skill.name)
+    table.add_row("scope", skill.scope)
+    table.add_row("path", str(skill.path))
+    table.add_row("estimated_tokens", str(skill.estimated_tokens))
+    table.add_row("description", skill.description or "[dim](未设置)[/dim]")
+    table.add_row(
+        "default_for",
+        ", ".join(skill.default_for) if skill.default_for else "[dim](空)[/dim]",
+    )
+    console.print(table)
+
+    if show_content:
+        console.print("\n[bold]正文：[/bold]")
+        console.print(skill.content)
 
 
 # ============================================================
