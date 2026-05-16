@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Skills DX — builtin skills frontmatter + roles-skill CLI)
+
+- **builtin skills 支持可选 YAML frontmatter**（参考 Anthropic Skills 规范）：`name` / `description` / `default_for` 三字段，向 Anthropic 标准格式靠拢但保留 prompt 注入式语义（不参与触发，仅供文档生成、CLI 列表、未来对外分发）。
+  - 6 个 builtin skill 全部加上 frontmatter；`default_for` 与 `roles.prompt._DEFAULT_ROLE_SKILLS` 双向镜像，由测试守门防漂移。
+- **`SkillsLoader` 新增 frontmatter 解析能力**（`src/ai_rd_team/roles/skills_loader.py`）：自动解析并剥离 `---` 块，正文与 metadata 分离暴露。`LoadedSkill` 新增 `metadata: Mapping` 字段以及便利属性 `description` / `default_for`。容错策略：YAML 解析失败 / 顶层非 mapping 时回退为 `metadata=None`，但仍剥离 `---` 块；按行扫描 O(n) 解析避免正则 catastrophic backtracking。
+- **新增 CLI 命令组 `ai-rd-team roles-skill`**（`src/ai_rd_team/cli/main.py`），独立于既有 `ai-rd-team skills`（CodeBuddy plugin marketplace 信息），明确两者语义区分：
+  - `roles-skill list`：三层（builtin / global / workspace）全列，✓ 标记 + 默认装配标签 + description 截断 + emoji 图标 + **每层根目录绝对路径** + **每个 skill 文件路径**（让"装在哪儿"一眼可见）。
+  - `roles-skill list --scope <layer>`：按层过滤，非法 scope 以 exit=2 失败。
+  - `roles-skill list --json`：纯 JSON 输出（用 `print` 而非 `console.print` 避开 Rich ANSI），便于脚本消费。
+  - `roles-skill show <ref>`：表格展示单个 Skill 的元数据（name / scope / path / tokens / description / default_for）；`--content` 附带打印 Skill 正文。
+  - 单文件解析失败用 ✗ 标记，不拖垮整体列表。
+- **测试**：`tests/unit/test_skills_loader.py` 新增 11 个单测覆盖 frontmatter 正常路径 / 容错 / 向后兼容 / 双向一致性守门；`tests/integration/test_cli_roles_skill.py` 新增 11 个集成测试覆盖 CLI 正常路径 / 错误码 / JSON 结构 / scope 过滤。
+
+### Changed (Skills DX)
+
+- 6 个 builtin skill 的 `description` 字段按 skill-creator 心法重写：明确"做什么 + 适用边界 + 何时用 + 覆盖什么"四段结构，提升对外分发为 Anthropic 标准 Skill 时的可读性与触发区分度。例如 `code-review-checklist` 显式标注"语言/框架无关，不替代 Python / Go 类专门 skill"；`vue3-basics` 标注"仅 Vue 3，不含 Vue 2 / Nuxt / SSR"。
+- 文档同步：`docs/04-skills.md` 增加 frontmatter 章节、CLI 子命令引用；`openspec/specs/design/05-roles-skills.md` §6.4 增加 CLI 入口说明并明确与 `skills` 命令的区分。
+
+### Fixed
+
+- `.gitignore` 增加 iWiki plugin 本地文件忽略（`.iwiki` / `.vscode/iwiki-*.json`）。
+
+---
+
 ### ⚠️ BREAKING (M7 — relocate-artifacts-to-root)
 
 **交付物落位从 `.ai-rd-team/runtime/artifacts/` 迁移到项目根**。团队产出的代码 / 文档 / 测试 / 部署脚本将直接落项目根，不再埋在隐藏目录下。过程数据（评审 / 阶段报告 / manifest / 状态 / 日志）仍保留 `.ai-rd-team/runtime/`。

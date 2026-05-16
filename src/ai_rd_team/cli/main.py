@@ -549,10 +549,11 @@ def roles_skill_list(
 
     # 人类可读格式
     icons = {"builtin": "📦", "global": "🏠", "workspace": "📁"}
-    placeholders = {
-        "builtin": "（无 builtin skill）",
-        "global": f"（空，可放到 {Path.home() / '.ai-rd-team' / 'skills'}/）",
-        "workspace": f"（空，可放到 {ws / '.ai-rd-team' / 'skills'}/）",
+    # 每层根目录（用于标题旁展示"安装到哪儿"，以及空目录时的引导）
+    layer_dirs: dict[str, Path] = {
+        "builtin": loader.builtin_dir,
+        "global": loader.global_dir,
+        "workspace": loader.workspace_dir,
     }
 
     for layer_name in ("builtin", "global", "workspace"):
@@ -560,28 +561,43 @@ def roles_skill_list(
             continue
         rows = layers[layer_name]
         icon = icons[layer_name]
+        layer_dir = layer_dirs[layer_name]
         title = f"{icon} {layer_name.capitalize()} ({len(rows)})"
-        console.print(f"\n[bold]{title}[/bold]")
+        # 标题行直接展示该层根目录，让"装在哪儿"一眼可见
+        console.print(f"\n[bold]{title}[/bold]  [dim]{layer_dir}[/dim]")
 
         if not rows:
-            console.print(f"  [dim]{placeholders[layer_name]}[/dim]")
+            hint = (
+                "（暂无；目录不存在，需要时手动 mkdir 即可）"
+                if not layer_dir.is_dir()
+                else "（空目录）"
+            )
+            console.print(f"  [dim]{hint}[/dim]")
             continue
 
         for row in rows:
             name = row["name"]
             default_for = tuple(row.get("default_for", []) or ())  # type: ignore[arg-type]
             err = row.get("error")
+            path_str = str(row.get("path", "") or "")
             if err:
                 console.print(f"  [red]✗[/red] {name}  [red]解析失败：{err}[/red]")
+                if path_str:
+                    console.print(f"    [dim]{path_str}[/dim]")
                 continue
 
             tag = _format_default_for(default_for)
             tag_color = "cyan" if default_for else "dim"
-            console.print(f"  [green]✓[/green] [bold]{name}[/bold]  [{tag_color}]{tag}[/{tag_color}]")
+            console.print(
+                f"  [green]✓[/green] [bold]{name}[/bold]  [{tag_color}]{tag}[/{tag_color}]"
+            )
 
             desc = row.get("description")
             if desc:
                 console.print(f"    [dim]{_truncate(str(desc))}[/dim]")
+            # 文件路径——告诉用户这个 skill 实际装在哪里，方便复制定位
+            if path_str:
+                console.print(f"    [dim]↳ {path_str}[/dim]")
 
 
 @roles_skill_app.command("show")

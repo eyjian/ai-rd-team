@@ -1,6 +1,6 @@
 ---
 name: vue3-basics
-description: Vue 3 前端开发基础。在使用 Vue 3 + Composition API + Vite + TypeScript 开发 Web 前端时使用，覆盖单文件组件、Pinia 状态管理、composable、路由、Vitest 测试与常见陷阱。
+description: Vue 3 + Composition API + Vite + TypeScript 前端开发基础（仅 Vue 3，不含 Vue 2 / Nuxt / SSR）。新建或扩展 Vue 3 SPA 时使用——覆盖单文件组件、`<script setup>`、Pinia 状态管理、可复用 composable、Vue Router、Vitest 单测，以及响应式陷阱（reactive 解构丢失、ref vs reactive 取舍）。
 default_for: []
 ---
 

@@ -1,9 +1,8 @@
 ---
 name: code-review-checklist
-description: 代码评审清单。在评审他人或自己的代码、审核 PR、检查代码质量时使用，覆盖正确性、可读性、可测试性、性能、安全、文档与测试六个维度，并给出评审语气与快速通过条件。
+description: 代码评审通用清单（语言 / 框架无关）。评审 PR、自检即将提交的代码、做合并前质量门禁时使用——覆盖正确性 / 可读性 / 可测试性 / 性能 / 安全 / 文档与测试六维，并给出评审语气与“无需 block 直接合并”的快速通过判据。不替代特定语言的最佳实践（Python / Go 类请用各自的 skill）。
 default_for: [architect, reviewer]
 ---
-
 # Code Review Checklist
 
 ## 适用场景

@@ -1,6 +1,6 @@
 ---
 name: pytest-guide
-description: Pytest 测试编写指南。在用 pytest 为 Python 项目编写单元测试或集成测试时使用，覆盖参数化、fixture、异常断言、mock、目录结构、覆盖率以及常见陷阱。
+description: Pytest 测试编写与排错指南（仅 Python pytest，不含 unittest）。新写测试、修复 flaky 测试、提高覆盖率时使用——覆盖参数化、fixture 作用域、异常断言、mock 路径、目录结构与命名约定、覆盖率配置；附 4 个高频陷阱（fixture 副作用、测试间状态泄漏、mock 路径写错、`tmp_path` 误用）。
 default_for: [developer, tester]
 ---
 

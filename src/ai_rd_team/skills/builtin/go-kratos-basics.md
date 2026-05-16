@@ -1,6 +1,6 @@
 ---
 name: go-kratos-basics
-description: Go + Kratos 后端开发基础。在使用 go-kratos 框架开发 gRPC/HTTP 后端服务时使用，覆盖分层目录（api/biz/data/service）、proto 优先、wire 依赖注入、错误处理、单测与集成测试等核心约定。
+description: go-kratos v2 后端服务开发基础（仅 kratos 框架，不含 gin / echo / 标准库 net/http）。开发 gRPC + HTTP 双协议后端服务时使用——覆盖 api / biz / data / service 四层划分、proto 优先、wire 依赖注入、kratos errors 错误模型、biz 单测 + integration 测试、生产级日志 / 配置 / 中间件最佳实践。
 default_for: []
 ---
 
