@@ -12,13 +12,38 @@
 - `xxx`（不带 scope）：按优先级 workspace > global > builtin 查找
 
 Skills 是 Markdown 文件（≤ 500 行），纯文档，无执行代码。
+
+可选的 YAML frontmatter（参考 Anthropic Skills 规范）::
+
+    ---
+    name: code-review-checklist
+    description: 代码评审清单。在评审 PR / 代码质量检查时使用。
+    default_for: [architect, reviewer]
+    ---
+
+    # 正文 ...
+
+约定：
+- 有 frontmatter 时，``LoadedSkill.content`` 只含正文（已剥离 ``---`` 块），
+  解析后的字段通过 ``LoadedSkill.metadata`` 暴露（只读 Mapping）。
+- 无 frontmatter 时，``metadata`` 为 ``None``，``content`` 为整个文件内容（向后兼容）。
+- ``estimated_tokens`` 仅基于正文计算，不计 frontmatter。
+
+frontmatter 字段说明：
+- ``name``：标识符，与文件名 ``<name>.md`` 一致（仅文档价值，不影响加载）
+- ``description``：一段简短描述，用于文档生成与未来对外分发为标准 Skill
+- ``default_for``：本项目自定义扩展，标记 "默认装配给哪些角色"，
+  应与 ``roles.prompt._DEFAULT_ROLE_SKILLS`` 镜像一致
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from types import MappingProxyType
+from typing import Any, Literal, Mapping
+
+import yaml
 
 SkillScope = Literal["builtin", "global", "workspace"]
 
@@ -40,18 +65,46 @@ class SkillReferenceError(SkillError):
 
 @dataclass(frozen=True)
 class LoadedSkill:
-    """加载后的 Skill。"""
+    """加载后的 Skill。
+
+    Attributes:
+        name: 不含 scope 前缀的 skill 名（与文件名 ``<name>.md`` 对应）
+        scope: 来源层（builtin / global / workspace）
+        path: 文件路径
+        content: 正文 Markdown（**已剥离 frontmatter**）
+        estimated_tokens: 仅基于 ``content`` 估算的 token 数
+        metadata: 解析后的 frontmatter；无 frontmatter 时为 ``None``
+    """
 
     name: str  # 不含 scope 前缀
     scope: SkillScope
     path: Path
     content: str
     estimated_tokens: int
+    metadata: Mapping[str, Any] | None = field(default=None)
 
     @property
     def ref(self) -> str:
         """规范化引用（带 scope）。"""
         return f"{self.scope}:{self.name}"
+
+    @property
+    def description(self) -> str | None:
+        """快捷访问 frontmatter 的 description 字段。"""
+        if self.metadata is None:
+            return None
+        value = self.metadata.get("description")
+        return value if isinstance(value, str) else None
+
+    @property
+    def default_for(self) -> tuple[str, ...]:
+        """快捷访问 frontmatter 的 default_for 字段（默认空元组）。"""
+        if self.metadata is None:
+            return ()
+        value = self.metadata.get("default_for", ())
+        if isinstance(value, (list, tuple)):
+            return tuple(str(v) for v in value)
+        return ()
 
 
 def _estimate_tokens(text: str) -> int:
@@ -66,6 +119,71 @@ def _estimate_tokens(text: str) -> int:
     chinese = sum(1 for ch in text if "\u4e00" <= ch <= "\u9fff")
     other = len(text) - chinese
     return int(chinese / 1.5) + int(other / 4)
+
+# YAML frontmatter 的开/闭分隔符：必须是独占一行的 ``---``（允许行尾空白）。
+# 注意：不用正则吞整个块，避免 catastrophic backtracking——按行扫描 O(n)。
+_FRONTMATTER_FENCE = "---"
+
+
+def _is_fence_line(line: str) -> bool:
+    """判断一行是否是合法的 frontmatter 分隔符 ``---``（去除 \\r 与右侧空白后）。"""
+    return line.rstrip("\r").rstrip() == _FRONTMATTER_FENCE
+
+
+def _parse_frontmatter(text: str) -> tuple[Mapping[str, Any] | None, str]:
+    """从 Markdown 文本顶部解析可选的 YAML frontmatter。
+
+    采用**按行扫描**而非单一正则匹配，避免在病态输入下出现指数回溯。
+
+    Args:
+        text: 文件原始文本
+
+    Returns:
+        (metadata, body)：
+        - 没有 frontmatter（或起始 ``---`` 后找不到闭合分隔符）时，metadata 为
+          ``None``，body 为原文本（**保留** 原始 ``---`` —— 不是 frontmatter 时
+          可能是正文里的 horizontal rule，不应被吞）
+        - 有 frontmatter 但 YAML 解析失败 / 顶层不是 mapping 时，metadata 按
+          ``None`` 处理（容错），但仍会剥掉 ``---`` 块——避免污染 prompt
+        - 解析成功时 metadata 是只读 ``MappingProxyType``
+    """
+    # 去除 BOM（不修改 text 之外的可见字符）
+    if text.startswith("\ufeff"):
+        text = text[1:]
+
+    # 必须以 ``---`` 行开头才进入解析流程；否则原样返回
+    lines = text.split("\n")
+    if not lines or not _is_fence_line(lines[0]):
+        return None, text
+
+    # 从第 2 行起寻找闭合 fence
+    closing_idx: int | None = None
+    for i in range(1, len(lines)):
+        if _is_fence_line(lines[i]):
+            closing_idx = i
+            break
+
+    if closing_idx is None:
+        # 起始 ``---`` 没有配对闭合 —— 不算 frontmatter，原样返回
+        return None, text
+
+    yaml_block = "\n".join(lines[1:closing_idx])
+    # body 取闭合 fence 之后所有内容，并丢弃紧随其后的空行
+    body_lines = lines[closing_idx + 1:]
+    while body_lines and body_lines[0].strip() == "":
+        body_lines.pop(0)
+    body = "\n".join(body_lines)
+
+    try:
+        parsed = yaml.safe_load(yaml_block) if yaml_block.strip() else None
+    except yaml.YAMLError:
+        # frontmatter 格式坏了：仍剥掉 ``---`` 块，但不暴露 metadata
+        return None, body
+
+    if not isinstance(parsed, dict):
+        return None, body
+
+    return MappingProxyType(dict(parsed)), body
 
 
 def default_builtin_dir() -> Path:
@@ -215,13 +333,15 @@ class SkillsLoader:
         if not path.is_file():
             raise SkillNotFoundError(f"{scope}:{name} (looked at {path})")
 
-        content = path.read_text(encoding="utf-8")
+        raw = path.read_text(encoding="utf-8")
+        metadata, body = _parse_frontmatter(raw)
         return LoadedSkill(
             name=name,
             scope=scope,
             path=path,
-            content=content,
-            estimated_tokens=_estimate_tokens(content),
+            content=body,
+            estimated_tokens=_estimate_tokens(body),
+            metadata=metadata,
         )
 
     @staticmethod

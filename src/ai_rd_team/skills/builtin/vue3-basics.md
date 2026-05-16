@@ -1,3 +1,9 @@
+---
+name: vue3-basics
+description: Vue 3 前端开发基础。在使用 Vue 3 + Composition API + Vite + TypeScript 开发 Web 前端时使用，覆盖单文件组件、Pinia 状态管理、composable、路由、Vitest 测试与常见陷阱。
+default_for: []
+---
+
 # Vue 3 Frontend Basics
 
 ## 适用场景

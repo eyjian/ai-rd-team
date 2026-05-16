@@ -2,6 +2,18 @@
 
 Skills 是 **Markdown 格式的知识卡片**，在成员 spawn 时注入到 Prompt 的 `# Skills` 段，让成员拥有专业技能。
 
+> **与 Anthropic Skills 的关系**
+>
+> 本项目的 Skill 概念受 [Anthropic Skills](https://github.com/anthropics/skills) 启发，但**两者不同**：
+>
+> | 维度 | 本项目 Skill | Anthropic Skill |
+> |---|---|---|
+> | 加载时机 | 角色 spawn 时**主动注入** prompt | LLM 运行中根据 description **自主触发** |
+> | 是否需 frontmatter | 可选（向后兼容） | 必须 |
+> | 是否可含脚本 | 不含（纯知识卡片） | 可含 `scripts/` / `references/` / `assets/` |
+>
+> Skill 文件可选加上 YAML frontmatter（见下文），让它同时保留向 Anthropic 标准靠拢的能力。
+
 ## 三层加载优先级
 
 ```
@@ -46,6 +58,12 @@ python -c "from ai_rd_team import builtin_skills_dir; print(builtin_skills_dir()
 Skill 是一个 Markdown 文件，推荐包含：
 
 ```markdown
+---
+name: <skill-name>
+description: 一句话说明这个 Skill 是干什么的、何时使用。
+default_for: []
+---
+
 # <Skill 名字>
 
 ## 适用场景
@@ -63,6 +81,39 @@ Skill 是一个 Markdown 文件，推荐包含：
 ## 参考
 外部链接。
 ```
+
+> **frontmatter 是可选的**。旧文件只有正文也能正常加载，不会报错。字段说明见下一节。
+
+## YAML frontmatter（可选）
+
+Skill 文件可以在顶部加上一段 YAML frontmatter，提供结构化元数据。
+
+```yaml
+---
+name: code-review-checklist
+description: 代码评审清单。在评审 PR / 代码质量检查时使用。
+default_for: [architect, reviewer]
+---
+```
+
+### 字段说明
+
+| 字段 | 是否必填 | 含义 |
+|---|---|---|
+| `name` | 推荐 | 标识符，需与文件名 `<name>.md` 一致（仅作文档价值，不影响加载） |
+| `description` | 推荐 | 一句话描述。**本项目不用于触发**，仅用于文档生成、CLI 列表、以及未来对外分发为标准 Skill |
+| `default_for` | 可选 | 本项目自定义扩展，标记该 Skill 默认装配给哪些角色。**与 `_DEFAULT_ROLE_SKILLS` 镜像一致**，本身不决定装配行为 |
+
+### 加载行为
+
+- **有 frontmatter**：加载后正文会被提取出来注入 prompt，`---` 块不会进入 prompt；metadata 以只读 Mapping 的形式暴露在 `LoadedSkill.metadata`
+- **无 frontmatter**：文件原样被当作正文注入 prompt，`metadata` 为 `None`（完全向后兼容）
+- **坏的 YAML**：不报错。容错处理为"无 metadata"，但 `---` 块仍会被剥离（避免污染 prompt）
+
+### 什么时候需要写 frontmatter？
+
+- **builtin Skill（贡献回内置）**：必须写。项目有守门测试检查所有 builtin 必须带 frontmatter 且 `default_for` 与代码中默认装配镜像一致
+- **workspace / global Skill**：完全可选。只是可以让 `description` 出现在 CLI / Web 面板里，以后也能够从本项目中导出为 Anthropic 标准 Skill
 
 ### 放到哪里？
 

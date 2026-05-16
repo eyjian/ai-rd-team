@@ -1,3 +1,9 @@
+---
+name: pytest-guide
+description: Pytest 测试编写指南。在用 pytest 为 Python 项目编写单元测试或集成测试时使用，覆盖参数化、fixture、异常断言、mock、目录结构、覆盖率以及常见陷阱。
+default_for: [developer, tester]
+---
+
 # Pytest Guide
 
 ## 适用场景

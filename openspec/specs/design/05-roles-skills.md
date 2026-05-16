@@ -659,6 +659,12 @@ roles:
 Skill 是一个 Markdown 文件，**纯文本无特殊语法**：
 
 ```markdown
+---
+name: <skill-name>           # 可选 frontmatter
+description: 一句话说明。
+default_for: [developer]
+---
+
 # Skill 名称（与文件名一致）
 
 ## 适用场景
@@ -683,24 +689,48 @@ Skill 是一个 Markdown 文件，**纯文本无特殊语法**：
 - 标题结构稳定（便于 SkillsLoader 解析）
 - 不含执行代码（纯文档）
 
+#### 可选 YAML frontmatter
+
+Skill 文件可以在顶部加上一段 YAML frontmatter，提供结构化元数据。本项目识别以下字段：
+
+| 字段 | 说明 |
+|------|------|
+| `name` | 标识符，需与文件名 `<name>.md` 一致（仅文档价值，**不参与加载寻址**） |
+| `description` | 一句话描述。**不参与触发决策**（与 Anthropic Skill 不同），仅用于文档生成 / CLI 列表 / 对外分发 |
+| `default_for` | 本项目自定义扩展，标记该 Skill 默认装配给哪些角色。与 `roles.prompt._DEFAULT_ROLE_SKILLS` 镜像一致，本身不决定装配行为 |
+
+**加载行为**：
+- 有 frontmatter：`---` 块被剥离，正文注入 prompt；metadata 以只读 Mapping 暴露于 `LoadedSkill.metadata`
+- 无 frontmatter：文件原样作为正文，`metadata = None`（完全向后兼容）
+- 坏的 YAML：容错为 `metadata = None`，但 `---` 块仍被剥离（避免污染 prompt）
+
+**builtin Skill 必须带 frontmatter**，且 `default_for` 与 `_DEFAULT_ROLE_SKILLS` 双向镜像一致（由 `tests/unit/test_skills_loader.py::TestDefaultForConsistency` 守门）。workspace / global Skill 的 frontmatter 完全可选。
+
 ### 6.4 SkillsLoader 接口
 
 ```python
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, Mapping
 
 @dataclass(frozen=True)
 class LoadedSkill:
     name: str                          # skill 名（不含 scope）
     scope: Literal["builtin", "global", "workspace"]
     path: Path                          # 来源文件
-    content: str                        # Markdown 原文
-    estimated_tokens: int               # 估算 token
+    content: str                        # Markdown 正文（**已剥离 frontmatter**）
+    estimated_tokens: int               # 仅基于 content 估算
+    metadata: Mapping[str, Any] | None = field(default=None)  # frontmatter，只读
+
+    @property
+    def description(self) -> str | None: ...    # 快捷访问 frontmatter.description
+
+    @property
+    def default_for(self) -> tuple[str, ...]: ...  # 快捷访问 frontmatter.default_for
 
 
 class SkillsLoader:
-    """三层 Skills 加载器。"""
+    """三层 Skills 加载器。加载时会自动解析并剥离可选的 YAML frontmatter。"""
     
     def __init__(
         self,
@@ -717,6 +747,10 @@ class SkillsLoader:
         
         Args:
             skill_ref: 'builtin:xxx' / 'global:xxx' / 'workspace:xxx' / 'xxx'
+        
+        Returns:
+            LoadedSkill：has frontmatter 时，``content`` 已剥离 ``---`` 块，
+            ``metadata`` 是只读 MappingProxyType；无 frontmatter 时 ``metadata`` 为 None。
         
         Raises:
             SkillNotFoundError: 未找到
@@ -744,6 +778,8 @@ class SkillsLoader:
             "workspace": self._list_in(self.workspace_dir),
         }
 ```
+
+> 实现参见 [src/ai_rd_team/roles/skills_loader.py](../../../src/ai_rd_team/roles/skills_loader.py)。frontmatter 的解析采用**按行扫描 O(n)** 而非正则，避免病态输入下的炸裂回溯；YAML 解析错误 / 顶层非 mapping 均被容错为 `metadata=None`，但 `---` 块仍会被剥离。
 
 ### 6.5 加载时机与注入方式（基于 P2 保守假设）
 

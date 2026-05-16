@@ -1,3 +1,9 @@
+---
+name: python-best-practices
+description: Python 代码编写规范与最佳实践。在编写或重构 Python 代码（库、CLI、Web 服务、脚本）时使用，覆盖类型注解、异常处理、路径与 IO、并发、测试组织和工具链（ruff/mypy/pytest）等核心约定。
+default_for: [developer, reviewer]
+---
+
 # Python Best Practices
 
 ## 适用场景

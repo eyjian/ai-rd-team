@@ -1,3 +1,9 @@
+---
+name: wxmini-basics
+description: 微信小程序原生开发基础。在用微信小程序原生框架（非 uni-app/Taro）开发小程序时使用，覆盖页面四文件结构、生命周期、wx.* API Promise 化、状态管理、自定义组件、分包加载与上线流程。
+default_for: []
+---
+
 # WeChat Mini Program Basics
 
 ## 适用场景
