@@ -214,3 +214,7 @@ __marimo__/
 prototype/**/driver.pid
 prototype/**/driver.stdout.log
 .trae
+
+# iWiki plugin files
+.iwiki
+.vscode/iwiki-*.json
