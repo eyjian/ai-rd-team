@@ -230,9 +230,7 @@ class TestBuiltinSkills:
 class TestFrontmatter:
     """覆盖 YAML frontmatter 的解析、剥离、容错与便利属性。"""
 
-    def test_with_frontmatter_strips_block_and_exposes_metadata(
-        self, tmp_path: Path
-    ) -> None:
+    def test_with_frontmatter_strips_block_and_exposes_metadata(self, tmp_path: Path) -> None:
         loader = SkillsLoader(
             builtin_dir=tmp_path / "b",
             global_dir=tmp_path / "g",
@@ -289,9 +287,7 @@ class TestFrontmatter:
 
         s1 = loader.load("with")
         s2 = loader.load("without")
-        assert s1.estimated_tokens == s2.estimated_tokens, (
-            "frontmatter 不应进入 token 估算"
-        )
+        assert s1.estimated_tokens == s2.estimated_tokens, "frontmatter 不应进入 token 估算"
 
     def test_metadata_is_readonly_mapping(self, tmp_path: Path) -> None:
         """metadata 应该是只读的（MappingProxyType），防止下游误改。"""
@@ -310,9 +306,7 @@ class TestFrontmatter:
         with pytest.raises(TypeError):
             skill.metadata["name"] = "hacked"  # type: ignore[index]
 
-    def test_malformed_yaml_falls_back_to_none_metadata(
-        self, tmp_path: Path
-    ) -> None:
+    def test_malformed_yaml_falls_back_to_none_metadata(self, tmp_path: Path) -> None:
         """frontmatter 里 YAML 坏掉时：仍剥离 ``---`` 块、metadata=None。"""
         loader = SkillsLoader(
             builtin_dir=tmp_path / "b",
@@ -338,9 +332,7 @@ class TestFrontmatter:
         assert skill.description is None
         assert skill.default_for == ()
 
-    def test_frontmatter_top_level_not_dict_falls_back(
-        self, tmp_path: Path
-    ) -> None:
+    def test_frontmatter_top_level_not_dict_falls_back(self, tmp_path: Path) -> None:
         """frontmatter YAML 顶层不是 mapping（比如纯列表）时同样按容错处理。"""
         loader = SkillsLoader(
             builtin_dir=tmp_path / "b",
@@ -354,9 +346,7 @@ class TestFrontmatter:
         assert skill.metadata is None
         assert skill.content.startswith("# Body")
 
-    def test_default_for_non_list_value_returns_empty_tuple(
-        self, tmp_path: Path
-    ) -> None:
+    def test_default_for_non_list_value_returns_empty_tuple(self, tmp_path: Path) -> None:
         """``default_for`` 字段写成字符串时不应炸，而是退化为空元组。"""
         loader = SkillsLoader(
             builtin_dir=tmp_path / "b",
@@ -408,9 +398,7 @@ class TestBackwardCompat:
         assert skill.description is None
         assert skill.default_for == ()
 
-    def test_dashes_in_middle_of_file_not_treated_as_frontmatter(
-        self, tmp_path: Path
-    ) -> None:
+    def test_dashes_in_middle_of_file_not_treated_as_frontmatter(self, tmp_path: Path) -> None:
         """正文里的 ``---``（horizontal rule）不应被误当作 frontmatter。"""
         loader = SkillsLoader(
             builtin_dir=tmp_path / "b",
@@ -476,9 +464,7 @@ class TestDefaultForConsistency:
         loader = SkillsLoader.create_default(workspace=tmp_path / ".ai-rd-team")
         for name in loader.list_available()["builtin"]:
             skill = loader.load(f"builtin:{name}")
-            assert skill.metadata is not None, (
-                f"builtin skill {name!r} 缺少 YAML frontmatter"
-            )
+            assert skill.metadata is not None, f"builtin skill {name!r} 缺少 YAML frontmatter"
             assert skill.metadata.get("name") == name, (
                 f"builtin skill {name!r} 的 frontmatter.name="
                 f"{skill.metadata.get('name')!r}，与文件名不一致"

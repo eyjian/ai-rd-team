@@ -38,10 +38,11 @@ frontmatter 字段说明：
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Literal, Mapping
+from typing import Any, Literal
 
 import yaml
 
@@ -120,6 +121,7 @@ def _estimate_tokens(text: str) -> int:
     other = len(text) - chinese
     return int(chinese / 1.5) + int(other / 4)
 
+
 # YAML frontmatter 的开/闭分隔符：必须是独占一行的 ``---``（允许行尾空白）。
 # 注意：不用正则吞整个块，避免 catastrophic backtracking——按行扫描 O(n)。
 _FRONTMATTER_FENCE = "---"
@@ -169,7 +171,7 @@ def _parse_frontmatter(text: str) -> tuple[Mapping[str, Any] | None, str]:
 
     yaml_block = "\n".join(lines[1:closing_idx])
     # body 取闭合 fence 之后所有内容，并丢弃紧随其后的空行
-    body_lines = lines[closing_idx + 1:]
+    body_lines = lines[closing_idx + 1 :]
     while body_lines and body_lines[0].strip() == "":
         body_lines.pop(0)
     body = "\n".join(body_lines)

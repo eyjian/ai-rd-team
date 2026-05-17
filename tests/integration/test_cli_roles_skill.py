@@ -33,9 +33,7 @@ class TestRolesSkillList:
         tmp_workspace: Path,
     ) -> None:
         """无参数时输出三层标题与 builtin 内容。"""
-        result = runner.invoke(
-            app, ["roles-skill", "list", "-w", str(tmp_workspace)]
-        )
+        result = runner.invoke(app, ["roles-skill", "list", "-w", str(tmp_workspace)])
         assert result.exit_code == 0
         # 三层标题都应出现（emoji 可能被 rich 折行，只检查关键字）
         assert "Builtin" in result.stdout
@@ -51,9 +49,7 @@ class TestRolesSkillList:
         tmp_workspace: Path,
     ) -> None:
         """default_for 不为空的 skill 应展示 ``默认装配:`` 标签。"""
-        result = runner.invoke(
-            app, ["roles-skill", "list", "-w", str(tmp_workspace)]
-        )
+        result = runner.invoke(app, ["roles-skill", "list", "-w", str(tmp_workspace)])
         assert result.exit_code == 0
         assert "默认装配" in result.stdout
         # python-best-practices 默认装配 developer + reviewer
@@ -94,9 +90,7 @@ class TestRolesSkillList:
         tmp_workspace: Path,
     ) -> None:
         """``--json`` 输出必须是合法 JSON，且结构稳定。"""
-        result = runner.invoke(
-            app, ["roles-skill", "list", "--json", "-w", str(tmp_workspace)]
-        )
+        result = runner.invoke(app, ["roles-skill", "list", "--json", "-w", str(tmp_workspace)])
         assert result.exit_code == 0
         data = json.loads(result.stdout)
         assert set(data.keys()) == {"builtin", "global", "workspace"}

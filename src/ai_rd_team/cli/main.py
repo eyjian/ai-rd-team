@@ -502,9 +502,7 @@ def roles_skill_list(
     from ai_rd_team.roles.skills_loader import SkillsLoader
 
     if scope is not None and scope not in ("builtin", "global", "workspace"):
-        console.print(
-            f"[red]无效的 scope {scope!r}，必须是 builtin/global/workspace[/red]"
-        )
+        console.print(f"[red]无效的 scope {scope!r}，必须是 builtin/global/workspace[/red]")
         raise typer.Exit(code=2)
 
     ws = workspace or Path.cwd()
@@ -520,24 +518,28 @@ def roles_skill_list(
         for name in names:
             try:
                 skill = loader.load(f"{layer_name}:{name}")
-                rows.append({
-                    "name": name,
-                    "scope": layer_name,
-                    "description": skill.description,
-                    "default_for": list(skill.default_for),
-                    "estimated_tokens": skill.estimated_tokens,
-                    "path": str(skill.path),
-                })
+                rows.append(
+                    {
+                        "name": name,
+                        "scope": layer_name,
+                        "description": skill.description,
+                        "default_for": list(skill.default_for),
+                        "estimated_tokens": skill.estimated_tokens,
+                        "path": str(skill.path),
+                    }
+                )
             except Exception as e:  # noqa: BLE001 - 单个文件解析失败不能拖垮列表
-                rows.append({
-                    "name": name,
-                    "scope": layer_name,
-                    "description": None,
-                    "default_for": [],
-                    "estimated_tokens": 0,
-                    "path": "",
-                    "error": str(e),
-                })
+                rows.append(
+                    {
+                        "name": name,
+                        "scope": layer_name,
+                        "description": None,
+                        "default_for": [],
+                        "estimated_tokens": 0,
+                        "path": "",
+                        "error": str(e),
+                    }
+                )
         layers[layer_name] = rows
 
     if json_output:
