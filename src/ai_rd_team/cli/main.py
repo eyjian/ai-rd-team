@@ -191,6 +191,17 @@ def run(
         "--no-onboarding",
         help="跳过首次引导（即使 config.yaml 缺失也用默认值）",
     ),
+    openspec: str = typer.Option(
+        "ask",
+        "--openspec",
+        help=(
+            "是否走 OpenSpec 流程："
+            "ask（默认，由首个发声者在启动后询问真实用户） / "
+            "yes（launcher 已代用户同意走 OpenSpec） / "
+            "no（已代用户决定跳过） / "
+            "skip（完全不提 OpenSpec）。"
+        ),
+    ),
     workspace: Path | None = typer.Option(
         None,
         "--workspace",
@@ -211,6 +222,14 @@ def run(
     # 档位合法性检查
     if mode is not None and mode not in ("lite", "standard", "full"):
         console.print(f"[red]无效的档位 {mode!r}，必须是 lite/standard/full[/red]")
+        raise typer.Exit(code=2)
+
+    # OpenSpec 指令合法性检查
+    openspec_directive = (openspec or "ask").lower()
+    if openspec_directive not in ("ask", "yes", "no", "skip"):
+        console.print(
+            f"[red]无效的 --openspec {openspec!r}，必须是 ask/yes/no/skip[/red]"
+        )
         raise typer.Exit(code=2)
 
     console.print(
@@ -241,7 +260,10 @@ def run(
 
     # 启动运行
     try:
-        ctx = engine.start_run(requirement=requirement)
+        ctx = engine.start_run(
+            requirement=requirement,
+            openspec_directive=openspec_directive,
+        )
     except Exception as e:
         console.print(f"[red]启动运行失败：{e}[/red]")
         if verbose:

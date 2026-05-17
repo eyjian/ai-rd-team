@@ -12,8 +12,8 @@ description: |
 
 帮用户把 ai-rd-team 跑起来。本 Skill 激活时，你需要：
 
-1. 确认用户的需求和工作区
-2. 启动 Python 引擎（`ai-rd-team run "..."`）
+1. 确认用户的需求和工作区，并**询问是否使用 OpenSpec 创建需求提议**
+2. 启动 Python 引擎（`ai-rd-team run "..."`，带 `--openspec` 参数）
 3. 激活 [ai-rd-team-bridge](./ai-rd-team-bridge.md) Skill 处理引擎产生的 intent
 4. 监控运行过程并向用户反馈关键事件
 
@@ -28,14 +28,43 @@ description: |
 
 ## 工作流程
 
-### Step 1：确认需求
+### Step 1：确认需求 + 询问 OpenSpec 意愿
 
 向用户确认：
 - 你要做什么？（一句话描述）
 - 当前工作区是 `cwd`（可直接用）还是指定目录？
 - 运行档位？（Lite / Standard / Full，默认 Standard）
+- **是否先用 OpenSpec 创建一份提议（proposal）再开始？**（推荐：是）
 
-如果用户已经把需求讲清楚了，**不要反复确认**，直接进入 Step 2。
+> **OpenSpec 询问话术示例**：
+> 
+> 这个需求要不要先用 OpenSpec 创建一份提议再开始？
+> - 选 yes → 我会先用 `openspec` CLI / openspec-propose skill 起草 proposal，再启动团队
+> - 选 no  → 跳过 OpenSpec，由团队首个发声者直接进入需求分析
+> - 选 ask → 交给团队首个发声者启动后再问一次
+> 
+> 推荐 yes，可让需求素材结构化、后期可追溯。
+
+根据用户答复设定 `--openspec` 参数：`yes` / `no` / `ask`（默认为 `ask`）。
+
+**若用户选 yes，进入 Step 1.5。**
+
+如果用户已经把需求讲清楚了且只说了需求本身，**不要反复确认其他细节**，
+但 OpenSpec 这一问**必须问一次**（除非用户在指令里明确写了 "不用 openspec" / "跳过 openspec"）。
+
+### Step 1.5：（仅在用户选 yes 时）检测并安装 OpenSpec
+
+```bash
+openspec --version 2>/dev/null || echo "openspec 未安装"
+```
+
+- 已安装 → 直接进入 Step 2。
+- 未安装 → **必须先问用户同意**：
+  > 未检测到 openspec。是否允许我执行以下命令全局安装？
+  > `npm install -g @fission-ai/openspec@latest`
+  > （来源：https://github.com/Fission-AI/OpenSpec ）
+  - 用户同意 → `execute_command` 运行上述命令，装完后重新验证。
+  - 用户拒绝 → 告知用户跳过 OpenSpec，将 `--openspec` 降为 `no`，进入 Step 2。
 
 ### Step 2：检查环境
 
@@ -60,8 +89,13 @@ ls .ai-rd-team/config.yaml 2>/dev/null || echo "首次运行，会触发引导"
 用 `execute_command`（非交互式）启动引擎：
 
 ```bash
-ai-rd-team run "<用户需求>" --mode <lite/standard/full> --no-onboarding 2>&1
+ai-rd-team run "<用户需求>" --mode <lite/standard/full> --openspec <yes/no/ask> --no-onboarding 2>&1
 ```
+
+参数说明：
+- `--openspec yes`：用户已同意走 OpenSpec（已在 Step 1.5 安装就绪）
+- `--openspec no` ：用户明确跳过 OpenSpec
+- `--openspec ask`：用户未明确表态，交由团队首个发声者启动后再问一次真实用户
 
 注意：
 - 带 `--no-onboarding` 避免在非交互环境卡住
@@ -126,10 +160,22 @@ ai-rd-team run "<用户需求>" --mode <lite/standard/full> --no-onboarding 2>&1
 ```
 用户：用 ai-rd-team 做一个日报系统
 
-你：好，我启动 ai-rd-team。默认 Standard 档（架构师 + 2 开发 + 测试），
-    如果你觉得简单可以说"用 Lite 档"。
+你：好，在启动前问一下：这个需求要不要先用 OpenSpec 创建一份提议？
+    - yes → 我先起草 proposal、再启动团队（推荐）
+    - no  → 跳过，直接启动团队
+    - ask → 启动后由团队首个发声者再问一次
+
+用户：yes
+
+你：[execute_command: openspec --version]
+    未检测到 openspec。是否允许我执行：
+      npm install -g @fission-ai/openspec@latest
+用户：可以
+
+你：[execute_command: npm install -g @fission-ai/openspec@latest]
+    ✅ openspec 安装完成。默认 Standard 档（架构师 + 2 开发 + 测试）。
     
-    [execute_command: ai-rd-team run "做一个日报系统" --mode standard --no-onboarding]
+    [execute_command: ai-rd-team run "做一个日报系统" --mode standard --openspec yes --no-onboarding]
 
     ✅ 引擎已启动，run_id=abc12345，团队已派发：
     - architect（陈架构）
@@ -148,7 +194,6 @@ ai-rd-team run "<用户需求>" --mode <lite/standard/full> --no-onboarding 2>&1
 
 ...
 ```
-
 ## 失败处理
 
 - **引擎启动失败**：展示错误信息，建议用户 `ai-rd-team config validate`
@@ -160,3 +205,5 @@ ai-rd-team run "<用户需求>" --mode <lite/standard/full> --no-onboarding 2>&1
 - ❌ 不要自己替成员工作（比如代架构师写设计）
 - ❌ 不要反复询问用户进度（成员自主推进）
 - ❌ 不要绕过引擎直接调工具（所有调用应来自 intent）
+- ❌ 不要**在用户未明确表态时**静默决定是否走 OpenSpec——需走 ask 路径交给 starter 问
+- ❌ 不要**未得同意就自动安装 openspec**，必须先问

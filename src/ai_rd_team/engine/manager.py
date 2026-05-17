@@ -75,6 +75,9 @@ class RunContext:
     requirement: str
     team_handle: TeamHandle | None = None
     members: dict[str, MemberHandle] = field(default_factory=dict)
+    # OpenSpec 询问指令（启动消息中是否引导 starter 询问真实用户走 OpenSpec 流程）
+    # 取值：ask（默认，starter 必须问） / yes（已确认走 OpenSpec） / no（已确认跳过） / skip（不提）
+    openspec_directive: str = "ask"
 
 
 # M1 默认启动角色（按档位）
@@ -281,12 +284,15 @@ class TeamEnvironmentManager:
         self,
         requirement: str,
         run_mode: RunMode | None = None,
+        openspec_directive: str = "ask",
     ) -> RunContext:
         """启动一次运行。
 
         Args:
             requirement: 需求描述
             run_mode: 运行档位（None 则使用 config.active_mode）
+            openspec_directive: OpenSpec 询问指令，传给 starter 的启动消息使用。
+                ask（默认）/ yes / no / skip 四选一，详见 _build_start_message。
 
         Returns:
             RunContext（run_id / team / members 等）
@@ -307,6 +313,7 @@ class TeamEnvironmentManager:
                 mode=mode,
                 started_at=datetime.now(),
                 requirement=requirement,
+                openspec_directive=(openspec_directive or "ask").lower(),
             )
 
             # 1. 元数据落盘
@@ -1066,15 +1073,65 @@ class TeamEnvironmentManager:
 
     @staticmethod
     def _build_start_message(requirement: str, ctx: RunContext) -> str:
-        """构造启动消息内容。"""
+        """构造启动消息内容。
+
+        注：本消息仅发给 starter（首个发声者，由 _find_starter 决定）。
+        OpenSpec 询问指令也只追加到 starter 的启动消息上，避免对其它成员产生噪声。
+        ctx.openspec_directive 取值：
+          - "ask"（默认）：starter 第一步必须问真实用户是否走 OpenSpec
+          - "yes"：launcher 已替用户决定走 OpenSpec，starter 直接执行 openspec 流程，不再问
+          - "no" ：launcher 已替用户决定跳过 OpenSpec，starter 直接进入需求分析
+          - "skip"：完全不提 OpenSpec（兼容老用法 / 离线场景）
+        """
         member_list = "\n".join(f"- {m.member_id}（{m.role}）" for m in ctx.members.values())
-        return (
+        base = (
             f"项目启动。\n\n"
             f"**需求**：\n{requirement}\n\n"
             f"**团队**：\n{member_list}\n\n"
             f"**档位**：{ctx.mode}\n\n"
-            f"请按你的角色职责开始工作。需要协作时直接用 send_message 联系队友。"
         )
+
+        directive = (ctx.openspec_directive or "ask").lower()
+        openspec_block = ""
+        if directive == "ask":
+            openspec_block = (
+                "**第一步（强制，先于一切动作）：询问真实用户是否使用 OpenSpec**\n\n"
+                "你是本团队的首个发声者，对接到的新需求负有"
+                "「征询 OpenSpec 流程意愿」的职责。在做任何需求分析、设计或编码之前，"
+                "请通过 send_message 给 `main` 发一条问题（main 会转交给真实用户），内容示例：\n\n"
+                "> 接到新需求：{需求一句话摘要}。\n"
+                "> 是否要先用 OpenSpec 创建一份提议（proposal）再开始？（推荐：是）\n"
+                "> - 是 → 我会调用 `openspec` CLI 或 openspec-propose skill 起草 proposal，再进入实现\n"
+                "> - 否 → 跳过 OpenSpec，按常规流程直接开始需求分析与设计\n\n"
+                "等真实用户回复后再推进：\n"
+                "- 用户答「是」：先检测 `openspec` 是否已安装（`openspec --version`）；"
+                "若未安装，**先问用户是否同意安装**：\n"
+                "  `npm install -g @fission-ai/openspec@latest`\n"
+                "  （参考 https://github.com/Fission-AI/OpenSpec）\n"
+                "  得到同意后再安装；用户拒绝则等同于「否」。安装/确认完成后再起草 proposal。\n"
+                "- 用户答「否」：跳过 OpenSpec，按常规流程进入需求分析与设计。\n\n"
+                "**重要豁免**：本规则**优先于** prompt 中「不要反复请示 main」的约束——"
+                "这一次必须问用户。\n\n"
+            )
+        elif directive == "yes":
+            openspec_block = (
+                "**第一步（已由 launcher 代为确认）：使用 OpenSpec 创建提议**\n\n"
+                "真实用户已经在 launcher 阶段同意走 OpenSpec 流程。请：\n"
+                "1. 检测 `openspec --version`；若未安装则**通过 send_message 向 main 申请同意**后执行 "
+                "`npm install -g @fission-ai/openspec@latest`；\n"
+                "2. 调用 `openspec` CLI 或 openspec-propose skill 起草 proposal；\n"
+                "3. proposal 完成并经用户确认后，再进入需求分析与实现。\n\n"
+                "**不要再问用户「是否使用 OpenSpec」这件事**，那已经决定了。\n\n"
+            )
+        elif directive == "no":
+            openspec_block = (
+                "**说明**：launcher 阶段真实用户已选择**跳过 OpenSpec**，请直接进入需求分析与设计，"
+                "不要再就 OpenSpec 提问。\n\n"
+            )
+        # directive == "skip" → 不追加任何 OpenSpec 相关内容
+
+        tail = "请按你的角色职责开始工作。需要协作时直接用 send_message 联系队友。"
+        return base + openspec_block + tail
 
     def _ensure_state(self, *allowed: EngineState) -> None:
         if self._state not in allowed:

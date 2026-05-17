@@ -172,6 +172,51 @@ codebuddy plugin install ai-rd-team@ai-rd-team
 
 ---
 
+## 新需求工作流：OpenSpec 优先（可选，但推荐）
+
+**接到一个新需求时，团队的第一动作不是马上开干，而是询问真实用户：是否先用 [OpenSpec](https://github.com/Fission-AI/OpenSpec) 创建一份提议（proposal）？**
+
+这条规则双层兜底，无论用户从哪条路径启动都会触发：
+
+| 触发层 | 触发点 | 谁问 |
+|--------|--------|------|
+| Launcher 层 | `ai-rd-team-launcher` Skill 的 Step 1 | 主 Agent 在启动引擎前问 |
+| 引擎层 | `start_run` 后发给 starter（首个发声者）的启动消息 | 团队领头角色（Full=PM 周立项 / Standard=陈架构 / Lite=林1号）通过 `send_message` 给 main 转给真实用户 |
+
+启动命令支持 `--openspec` 参数，4 种取值：
+
+| 取值 | 含义 |
+|------|------|
+| `ask`（默认） | 引擎不预设答案，由 starter 启动后第一动作问真实用户 |
+| `yes` | launcher 阶段用户已同意走 OpenSpec，starter 直接执行 OpenSpec 流程 |
+| `no` | launcher 阶段用户已决定跳过，starter 不再就此提问 |
+| `skip` | 启动消息中完全不提 OpenSpec（兼容老用法 / 离线场景） |
+
+**OpenSpec 未安装时**：launcher 与 starter 都**先询问用户、得到同意后**才执行：
+
+```bash
+npm install -g @fission-ai/openspec@latest
+```
+
+来源：<https://github.com/Fission-AI/OpenSpec>
+
+**示例（用户路径，CLI）**：
+
+```bash
+# 默认 ask：starter 启动后会问你
+ai-rd-team run "做一个日报系统"
+
+# 你已经决定要走：launcher 路径里答 yes，CLI 里直接 --openspec yes
+ai-rd-team run "做一个日报系统" --openspec yes
+
+# 急活、明确不走：
+ai-rd-team run "做一个日报系统" --openspec no
+```
+
+> 设计动机：让需求从一开始就被结构化记录下来（proposal → spec → tasks），后续审计、回放、增量演进都有据可依。详见 [openspec/specs/](openspec/specs/) 里 ai-rd-team 自身使用 OpenSpec 的范例。
+
+---
+
 ## 核心理念（为什么不是工作流编排？）
 
 | 维度 | 工作流编排 | ai-rd-team |
